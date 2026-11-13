@@ -1,4 +1,4 @@
-name: 更新三大法人並發布網站
+name: 更新三大法人、股票行情並發布網站
 
 on:
   push:
@@ -7,15 +7,20 @@ on:
       - 'index.html'
       - 'institutional.js'
       - 'institutional.css'
-      - 'scripts/update_institutions.py'
+      - 'etf_simulator.js'
+      - 'market.js'
+      - 'active_etf.js'
+      - 'tools.css'
+      - 'scripts/**'
+      - 'data/active-etf/sources.json'
       - '.github/workflows/update-institutions.yml'
   schedule:
-    # 20:35 / 22:35 Taipei weekdays; cron interpreted in UTC.
+    # Taiwan local 20:35 and 22:35 weekdays (UTC 12:35 and 14:35).
     - cron: '35 12,14 * * 1-5'
   workflow_dispatch:
     inputs:
       mode:
-        description: '更新範圍（首次建議 bootstrap）'
+        description: '法人更新範圍（首次建議 bootstrap）'
         type: choice
         required: true
         default: auto
@@ -33,7 +38,7 @@ concurrency:
 jobs:
   update-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -44,32 +49,37 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch and validate TWSE / TPEx official data
+      - name: Fetch official institutional reports
         env:
           UPDATE_MODE: ${{ github.event.inputs.mode || 'auto' }}
+        run: python scripts/update_institutions.py --mode "$UPDATE_MODE"
+      - name: Fetch official TWSE/TPEx after-close OHLCV and day trading
         run: |
-          python scripts/update_institutions.py --mode "$UPDATE_MODE"
-      - name: Record public dataset in repository
+          python scripts/update_market.py || echo '::warning::Stock market snapshot unavailable; showing the previous validated data or an empty warning.'
+      - name: Optional configured official PCF CSV sources
+        run: |
+          python scripts/update_active_etf.py || echo '::warning::Some ETF PCF source updates failed; old validated public snapshots retained.'
+      - name: Commit public market datasets to repository
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/institutional
+          git add data/institutional data/market data/active-etf/latest.json
           if ! git diff --cached --quiet; then
-            git commit -m "data: refresh public TWSE and TPEx institutional reports"
+            git commit -m "data: refresh public market and ETF datasets"
             git push
           else
             echo "Public data unchanged"
           fi
-      - name: Stage only public website assets
+      - name: Stage public website assets
         run: |
           mkdir -p _site/data
-          cp index.html institutional.js institutional.css _site/
-          cp -R data/institutional _site/data/
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js tools.css _site/
+          cp -R data/institutional data/market data/active-etf _site/data/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
           path: '_site'
-      - name: Deploy to GitHub Pages
+      - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
