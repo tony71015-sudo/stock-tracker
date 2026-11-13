@@ -53,6 +53,11 @@ jobs:
         env:
           UPDATE_MODE: ${{ github.event.inputs.mode || 'auto' }}
         run: python scripts/update_institutions.py --mode "$UPDATE_MODE"
+      - name: Fetch official TWSE whole-market institutional money flows (BFI82U)
+        env:
+          UPDATE_MODE: ${{ github.event.inputs.mode || 'auto' }}
+        run: |
+          python scripts/update_market_flows.py --mode "$UPDATE_MODE" || echo '::warning::TWSE whole-market money flows unavailable; previously validated records retained.'
       - name: Fetch official TWSE/TPEx after-close OHLCV and day trading
         run: |
           python scripts/update_market.py || echo '::warning::Stock market snapshot unavailable; showing the previous validated data or an empty warning.'
