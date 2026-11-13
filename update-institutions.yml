@@ -1,0 +1,75 @@
+name: 更新三大法人並發布網站
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'institutional.js'
+      - 'institutional.css'
+      - 'scripts/update_institutions.py'
+      - '.github/workflows/update-institutions.yml'
+  schedule:
+    # 20:35 / 22:35 Taipei weekdays; cron interpreted in UTC.
+    - cron: '35 12,14 * * 1-5'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '更新範圍（首次建議 bootstrap）'
+        type: choice
+        required: true
+        default: auto
+        options: [auto, bootstrap, daily]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: trade-compass-pages
+  cancel-in-progress: false
+
+jobs:
+  update-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch and validate TWSE / TPEx official data
+        env:
+          UPDATE_MODE: ${{ github.event.inputs.mode || 'auto' }}
+        run: |
+          python scripts/update_institutions.py --mode "$UPDATE_MODE"
+      - name: Record public dataset in repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/institutional
+          if ! git diff --cached --quiet; then
+            git commit -m "data: refresh public TWSE and TPEx institutional reports"
+            git push
+          else
+            echo "Public data unchanged"
+          fi
+      - name: Stage only public website assets
+        run: |
+          mkdir -p _site/data
+          cp index.html institutional.js institutional.css _site/
+          cp -R data/institutional _site/data/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: '_site'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

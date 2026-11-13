@@ -1,0 +1,1 @@
+{"schema":1,"generatedAt":null,"marketData":{"TWSE":{"date":null,"sessions":0,"start":null,"entries":[]},"TPEX":{"date":null,"sessions":0,"start":null,"entries":[]}},"windowDays":[5,10,20,60],"units":"shares","notes":"尚未初始化；至 GitHub Actions 手動執行首次資料更新。"}
