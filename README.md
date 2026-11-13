@@ -1,8 +1,27 @@
-# 投資風控中心 Trade Compass v1.4
+# 投資風控中心 Trade Compass v1.4.2
 
 **沿用既有 GitHub Pages `https://tony71015-sudo.github.io/stock-tracker/`，不改網址。**
 
 這份網站是以原 v1.3 原始程式碼為底擴充，保留交易紀錄、平均成本、分檔未實現損益、移動停利停損、國泰證券 2.8 折試算、三大法人、JSON 備份與版本說明，新增以下三個分頁。
+
+## v1.4.2 新增：盤中停損／停利試算（不需等待收盤）
+
+- 位置：「總覽儀表板 → 近期價格追蹤」下方，或「價格追蹤」頁最上方。
+- 自動帶入**選定日期當時的持有股數、加權平均成本、原本的初始停損與移動停利參數**。
+- 必填：**股票、日期、目前價格、觀察時間**。選填：當天截至觀察時的最高價與最低價。
+- 顯示：初始停損／移動停利啟動價、此次試算警示線、目前價距警示線的比例、以目前價估算的損益與狀態。
+- 既有每日行情**僅使用試算日以前**的紀錄作為上一日狀態；當日即使已有正式收盤 K 棒，也不會在盤中回頭讀取，避免「事後資訊」污染。
+- 若只填目前價，系統只能推斷「當日到目前至少碰過此價格」，**不能推論當日完整最高／最低**；若多次重新試算，要自行更新當日截至目前的最高／最低，否則不能完整延續盤中創高。
+- 盤中最低價碰到「當天抬升的警示線」時，因缺少逐筆時序，僅標示**可能觸線**，不能判定先創高後回檔。警示線是條件式風控參考，**不代表曾觸發券商委託或已成交**。
+- 盤中試算會以獨立欄位 `intradayPrices` 儲存在同一個瀏覽器 localStorage `trailing-stop-tw-web-v1`，並納入主站 JSON 備份。**不修改** `quotes`（正式每日最高／最低／收盤紀錄）、`manualPrices`（估值價格），也不影響總覽持股市值與未實現損益。
+- 仍然**沒有即時行情串接**，須由使用者自行查價、輸入。清除網站資料將失去盤中試算與交易紀錄，先完成 JSON 備份。
+
+## v1.4.1 新增：上市大盤三大法人買賣超金額
+
+- 「三大法人籌碼」頁頂部新增**上市大盤三大法人金額彙總**，可以選擇已抓取的日期，查看外資、投信、自營商、合計及買進／賣出／買賣超。
+- 大盤資料採證交所 **BFI82U** 分類金額，單位 **新臺幣元（介面換算億元）**；**不含上櫃**，也不是下方個股買賣超的「股數」。
+- 新增抓取程式 `scripts/update_market_flows.py`、公開資料檔 `data/institutional/market-flow.json`，由原 GitHub Actions 工作流程排程執行。
+- 在 v1.4.2 修復分類加總驗證時的瀏覽器變數錯誤，並補齊畫面測試；仍需在使用者的 GitHub Actions 實際確認官方資料有成功讀回。
 
 ## 1. v1.4 新增分頁
 
@@ -68,7 +87,7 @@ GitHub Actions 在週一至週五臺灣時間 **20:35、22:35** 嘗試更新並�
 
 ```text
 stock-tracker/
-├── index.html                      原本完整應用（v1.4）
+├── index.html                      原本完整應用（v1.4.2）
 ├── institutional.js               原有法人模組
 ├── institutional.css
 ├── etf_simulator.js                ETF 0～40 年投資試算與圖表
@@ -77,6 +96,7 @@ stock-tracker/
 ├── tools.css                       三個新分頁的樣式
 ├── scripts/
 │   ├── update_institutions.py      v1.3 三大法人資料收集
+│   ├── update_market_flows.py      v1.4.1 BFI82U 上市大盤買賣金額
 │   ├── update_market.py            v1.4 開高低收、當沖資料
 │   └── update_active_etf.py        v1.4 可選：已配置的官方 CSV PCF
 ├── data/
@@ -104,6 +124,7 @@ stock-tracker/
 ```bash
 python -m unittest discover -s tests -v
 python scripts/update_institutions.py --mode bootstrap
+python scripts/update_market_flows.py --mode bootstrap
 python scripts/update_market.py
 python scripts/update_active_etf.py
 ```

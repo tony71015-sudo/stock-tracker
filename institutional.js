@@ -4,7 +4,7 @@
   const BASE = 'data/institutional/';
   const PERIODS = [1, 5, 10, 20, 60];
   const RANGES = [5, 10, 20, 60];
-  const state = { status:'idle', error:'', payload:null, market:'ALL', period:1, actor: 'total', side:'buy', view:'ranking', search:'', select:'', series:{}, seriesLoading:'', seriesError:'', queryPage:0 };
+  const state = { status:'idle', error:'', payload:null, market:'ALL', period:1, actor: 'total', side:'buy', view:'ranking', search:'', select:'', series:{}, seriesLoading:'', seriesError:'', queryPage:0, flowStatus:'idle', flowError:'', flowData:null, flowDate:'' };
   const escape = text => String(text ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const fmt = x => x==null ? '—' : Number(x).toLocaleString('zh-TW', {maximumFractionDigits:0});
   const signed = x => x==null ? '—' : (Number(x)>0?'+':'') + fmt(x);
@@ -56,6 +56,46 @@
         for (let i=8;i<12;i++) if(r[i]!==null && (!Array.isArray(r[i]) || r[i].length!==5 || !r[i].slice(0,5).every(safeNumber))) throw Error('累積資料格式錯誤');
       }
     }
+  }
+  function validateFlow(data) {
+    if(!data || data.schema!==1 || data.market!=='TWSE' || data.unit!=='TWD' || !Array.isArray(data.records)) throw Error('大盤法人金額資料格式不相容');
+    for(const row of data.records){
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(String(row.date||'')))throw Error('大盤法人日期格式錯誤');
+      const a=row.actors||{};
+      for(const name of ['foreign','trust','dealer','dealerOwn','dealerHedge','total']){
+        const t=a[name];if(!t || !['buy','sell','net'].every(k=>Number.isSafeInteger(t[k])) || t.buy<0 || t.sell<0 || t.net!==t.buy-t.sell) throw Error('大盤法人金額檢查失敗');
+      }
+      for(const kind of ['buy','sell','net']){
+        if(a.dealer[kind]!==a.dealerOwn[kind]+a.dealerHedge[kind] || a.total[kind]!==a.foreign[kind]+a.trust[kind]+a.dealer[kind]) throw Error('大盤法人分類加總不一致');
+      }
+    }
+  }
+  async function loadFlow(force=false){
+    if(!force && state.flowStatus!=='idle')return;
+    state.flowStatus='loading';state.flowError='';
+    try{const data=await fetchJson('market-flow.json');validateFlow(data);state.flowData=data;state.flowStatus='ready';}
+    catch(err){state.flowStatus='error';state.flowError=String(err.message||err);}
+    redraw();
+  }
+  const formatBillion = value => value==null?'—':(value/1e8).toLocaleString('zh-TW',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const signedBillion = v => v==null?'—':(v>0?'+':'')+formatBillion(v);
+  function marketFlows(){
+    if(state.flowStatus==='idle')loadFlow();
+    let html=`<section class="panel inst-flow-section"><div class="panel-head"><div><h2 class="panel-title">上市大盤・三大法人每日買賣超</h2><p class="panel-sub">證交所 BFI82U 官方彙總・單位：億元（新臺幣）・不是個股買賣超股數</p></div>`;
+    if(state.flowStatus!=='ready'){
+      html+=`</div><div class="inst-flow-message">${state.flowStatus==='error'?'尚無法讀取大盤法人資料：'+escape(state.flowError)+'。請確認 Actions 已發布 market-flow.json。':'正在讀取官方大盤法人買賣金額…'}</div></section>`;
+      return html;
+    }
+    const rows=[...(state.flowData.records||[])].sort((a,b)=>b.date.localeCompare(a.date));
+    if(!rows.length)return html+`</div><div class="inst-flow-message">尚未建立大盤法人金額資料。請在 GitHub Actions 重新執行 bootstrap，完成後重新讀取。</div></section>`;
+    const selected=rows.find(r=>r.date===state.flowDate)||rows[0];
+    const a=selected.actors;
+    html+=`<div class="inst-inline"><label for="instFlowDate" class="small muted">查看日期</label><select id="instFlowDate" class="field" aria-label="大盤法人交易日期">${rows.map(r=>`<option value="${escape(r.date)}" ${selected.date===r.date?'selected':''}>${escape(r.date.replace(/-/g,'/'))}</option>`).join('')}</select></div></div>`;
+    html+=`<div class="inst-flow-cards">${[['foreign','外資及陸資'],['trust','投信'],['dealer','自營商'],['total','三大法人合計']].map(([k,label])=>`<div class="inst-flow-card"><div class="k">${label}</div><div class="v ${signClass(a[k].net)}">${signedBillion(a[k].net)} <span>億元</span></div><div class="h">${a[k].net>=0?'淨買超':'淨賣超'}</div></div>`).join('')}</div>`;
+    html+=`<div class="table-wrap"><table class="data-table inst-flow-table"><thead><tr><th>法人分類</th><th class="num">買進（億元）</th><th class="num">賣出（億元）</th><th class="num">買賣超（億元）</th></tr></thead><tbody>${[['foreign','外資及陸資'],['trust','投信'],['dealerOwn','自營商（自行買賣）'],['dealerHedge','自營商（避險）'],['dealer','自營商合計'],['total','三大法人總計']].map(([k,label])=>`<tr><td><b>${label}</b></td><td class="num">${formatBillion(a[k].buy)}</td><td class="num">${formatBillion(a[k].sell)}</td><td class="num strong ${signClass(a[k].net)}">${signedBillion(a[k].net)}</td></tr>`).join('')}</tbody></table></div>`;
+    html+=`<p class="inst-note" style="padding:0 22px 18px">資料日期：${escape(selected.date)}；最近可選 ${rows.length} 個已驗證交易日。此資料為上市集中市場之交易金額，<b>不包含上櫃市場</b>，且與下方個股法人買賣超（股）口徑不同。外資自營商不重複加總。<a href="https://www.twse.com.tw/zh/trading/foreign/bfi82u.html" target="_blank" rel="noopener noreferrer">證交所原始資料</a>。</p>`;
+    if(state.flowData.lastRunErrors?.length) html+=`<div class="inst-flow-message">最近更新有 ${state.flowData.lastRunErrors.length} 個日期抓取失敗；已取得的交易日仍可查詢，缺漏日期不會補成零。</div>`;
+    return html+'</section>';
   }
   async function loadLatest(force=false) {
     if (!force && (state.status==='loading' || state.status==='ready')) return;
@@ -192,10 +232,12 @@
   }
   function html(){
     if(state.status==='idle') loadLatest();
+    if(state.flowStatus==='idle')loadFlow();
     let out=header();
     if(state.status==='loading') return out+`<section class="panel inst-loading">正在讀取已公開的三大法人快照…</section>`;
     if(state.status==='error') return out+`<div class="inst-banner inst-error">讀取官方資料快照失敗：${escape(state.error)}。請確認最新 JSON 已透過 GitHub Pages 發布；也可點「重新讀取」。</div>`;
     if(state.status!=='ready')return out;
+    out+=marketFlows();
     out+=filters();
     if(state.view==='ranking')out+=ranking();
     if(state.view==='search')out+=searchPage();
@@ -222,7 +264,7 @@
   document.addEventListener('click',event=>{
     const b=event.target.closest('[data-inst-refresh],[data-inst-view],[data-inst-search],[data-inst-detail],[data-inst-close]');
     if(!b)return;
-    if(b.hasAttribute('data-inst-refresh')) {state.series={}; loadLatest(true);}
+    if(b.hasAttribute('data-inst-refresh')) {state.series={}; loadLatest(true);loadFlow(true);}
     if(b.dataset.instView) {state.view=b.dataset.instView; state.select=''; redraw();}
     if(b.hasAttribute('data-inst-search')) {state.search=document.getElementById('instSearch')?.value.trim()||''; state.view='search'; state.select='';redraw();}
     if(b.dataset.instDetail) select(b.dataset.instDetail);
@@ -233,6 +275,7 @@
   });
   document.addEventListener('change',event=>{
     const v=event.target?.value;
+    if(event.target?.id==='instFlowDate'){state.flowDate=v;redraw();return;}
     if(event.target?.id==='instMarket')state.market=v;
     else if(event.target?.id==='instPeriod')state.period=Number(v);
     else if(event.target?.id==='instActor')state.actor=v;
