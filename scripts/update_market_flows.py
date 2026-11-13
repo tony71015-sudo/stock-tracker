@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Fetch TWSE whole-market BFI82U institutional buy/sell *amounts*.
 
-Improved history backfill version for Trade Compass:
+Historical day query uses BFI82U dayDate=YYYYMMDD&type=day (NOT date=).
+
+Corrected BFI82U historical lookup and backfill for Trade Compass:
 - bootstrap backfills enough verified trading days (up to 90 records)
 - daily/auto refresh recent windows without treating all non-trading days as fatal
 - preserves previously validated history
@@ -88,7 +90,7 @@ def parse_bfi82u(payload, requested):
 
 
 def fetch_day(day, retries=3):
-    url = URL + '?' + urlencode({'date': day.strftime('%Y%m%d'), 'response': 'json'})
+    url = URL + '?' + urlencode({'type': 'day', 'dayDate': day.strftime('%Y%m%d'), 'response': 'json'})
     for attempt in range(retries):
         try:
             req = Request(
@@ -104,7 +106,10 @@ def fetch_day(day, retries=3):
                 if response.read(1):
                     raise ValueError('Unexpected oversized response')
             return parse_bfi82u(json.loads(raw.decode('utf-8-sig')), day)
-        except (HTTPError, URLError, TimeoutError, ValueError, json.JSONDecodeError) as err:
+        except ValueError as err:
+            # Deterministic format/date mismatch should not be retried blindly.
+            raise RuntimeError(f'{day}: ValueError: {err}') from err
+        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as err:
             if attempt == retries - 1:
                 raise RuntimeError(f'{day}: {type(err).__name__}: {err}') from err
             time.sleep(1.5 * (attempt + 1))
@@ -130,20 +135,15 @@ def load_previous():
 
 
 def candidate_dates(today: dt.date, mode: str, existing_count: int):
-    """Yield business weekdays to probe, newest first at runtime after reversal.
-
-    bootstrap: look back far enough to try building ~90 verified trading days.
-    auto: if no history, behave like bootstrap; else refresh recent ~15 weekdays.
-    daily: refresh recent ~10 weekdays.
-    """
-    if mode == 'bootstrap' or (mode == 'auto' and existing_count == 0):
-        max_calendar = 180
+    """Probe latest days first so the 90-date archive has no avoidable middle gap."""
+    if mode == 'bootstrap' or (mode == 'auto' and existing_count < 15):
+        lookback = 220
     elif mode == 'daily':
-        max_calendar = 20
+        lookback = 20
     else:
-        max_calendar = 30
-    dates = [today - dt.timedelta(days=i) for i in range(max_calendar - 1, -1, -1)]
-    return [d for d in dates if d.weekday() < 5]
+        lookback = 30
+    return [today - dt.timedelta(days=i) for i in range(lookback)
+            if (today - dt.timedelta(days=i)).weekday() < 5]
 
 
 def run(today, mode='auto', delay=.65):
@@ -151,44 +151,50 @@ def run(today, mode='auto', delay=.65):
     failures = []
     successes = 0
     dates = candidate_dates(today, mode, len(old))
-
-    bootstrap_like = mode == 'bootstrap' or (mode == 'auto' and not old)
-    target_records = 90 if bootstrap_like else max(15, len(old))
-    recent_cutoff = today - dt.timedelta(days=7)
-
+    bootstrap_like = mode == 'bootstrap' or (mode == 'auto' and len(old) < 15)
+    target_records = 90
+    validated_in_window = 0
+    recent_cutoff = today - dt.timedelta(days=4)
     for day in dates:
-        # Skip already validated older dates on regular refresh, but allow recent re-checks.
-        if day.isoformat() in old and not (bootstrap_like and len(old) < target_records) and day < recent_cutoff:
+        date_key = day.isoformat()
+        # Previously validated reports are usable without re-fetching. Recheck only latest days.
+        if date_key in old and day < recent_cutoff:
+            validated_in_window += 1
+            if bootstrap_like and validated_in_window >= target_records:
+                break
             continue
         try:
             result = fetch_day(day)
             if result:
                 old[result['date']] = result
+                validated_in_window += 1
                 successes += 1
                 LOG.info('TWSE total market BFI82U %s verified', day)
+            elif date_key in old:
+                validated_in_window += 1
+                LOG.info('%s official report not available now; retaining verified snapshot', day)
             else:
-                LOG.info('TWSE total market BFI82U %s has no official data (holiday/non-trading)', day)
+                LOG.info('TWSE total market BFI82U %s no official report (non-trading)', day)
         except Exception as err:
             failures.append(str(err))
             LOG.warning('%s', err)
-        if bootstrap_like and len(old) >= target_records:
+            if date_key in old:
+                validated_in_window += 1
+                LOG.info('Retained previously verified BFI82U date %s', day)
+        if bootstrap_like and validated_in_window >= target_records:
             break
         time.sleep(max(0, delay))
-
     rows = [old[k] for k in sorted(old)[-90:]]
     saved = {
-        'schema': 1,
-        'market': 'TWSE',
-        'unit': 'TWD',
-        'updatedAt': dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
-        'records': rows,
-        'lastRunErrors': failures[:30],
-        'source': 'https://www.twse.com.tw/zh/trading/foreign/bfi82u.html',
-        'notes': '官方上市集中市場三大法人買賣金額彙總（元）。非個股買賣超股數；外資自營商不重複計入。',
+        'schema':1,'market':'TWSE','unit':'TWD',
+        'updatedAt':dt.datetime.now(dt.timezone.utc).isoformat(timespec='seconds'),
+        'records':rows,'lastRunErrors':failures[:30],
+        'source':'https://www.twse.com.tw/zh/trading/foreign/bfi82u.html',
+        'notes':'官方上市集中市場三大法人買賣金額彙總（元）。非個股買賣超股數；外資自營商不重複計入。',
     }
-    DEST.parent.mkdir(parents=True, exist_ok=True)
-    DEST.write_text(json.dumps(saved, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
-    LOG.info('Saved %s validated dates; %s new reports; %s query errors', len(rows), successes, len(failures))
+    DEST.parent.mkdir(parents=True,exist_ok=True)
+    DEST.write_text(json.dumps(saved,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
+    LOG.info('Saved %s validated dates; %s new reports; %s query errors',len(rows),successes,len(failures))
     return saved
 
 
