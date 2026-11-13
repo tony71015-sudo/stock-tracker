@@ -24,6 +24,19 @@
 .calc-mini-line span{color:#8394a6}.calc-mini-line strong{font-variant-numeric:tabular-nums}
 @media(max-width:1150px){.calc-layout{grid-template-columns:1fr}.calc-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.calc-forms{grid-template-columns:1fr}.calc-input.wide{grid-column:auto}.calc-kpis{gap:10px}.calc-kpi{padding:14px}.calc-right-details{grid-template-columns:1fr}.calc-fields,.calc-box{padding:18px}}
+
+/* v1.2: valuation updates and documentation */
+.valuation-banner{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:#eff8fa;border:1px solid #d5e8ed;padding:16px 20px;border-radius:13px;margin:8px 0 18px;color:#3f6677}
+.valuation-banner strong{font-size:13px;color:#245366}.valuation-banner p{margin:5px 0 0;font-size:12px;line-height:1.75}
+.val-secondary{font-size:11px;color:#8799a8;margin-top:6px;line-height:1.5}
+.val-pnl{font-weight:850;font-size:14px}.val-pnl .percent{display:block;font-size:11px;font-weight:700;margin-top:5px}
+.quote-chip{display:inline-block;margin-top:5px;border-radius:5px;background:#f0f4f8;color:#60798e;padding:2px 6px;font-size:10px}
+.docs-hero{padding:25px 28px;background:linear-gradient(130deg,#123649,#0e6671);color:#fff;border-radius:16px;margin-bottom:20px}
+.docs-hero h2{font-size:21px;margin:6px 0}.docs-hero p{color:#c4e1e6;font-size:13px;line-height:1.85;max-width:860px}
+.docs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:17px}
+.docs-card{padding:23px 25px}.docs-card h3{margin:0 0 13px;font-size:15px}.docs-card p,.docs-card li{font-size:12px;color:#6c8195;line-height:1.85}
+.docs-card ul{padding-left:19px;margin-bottom:0}.docs-steps{padding:0 0 0 21px;margin:0}.docs-steps li{margin:0 0 8px}
+@media(max-width:820px){.docs-grid{grid-template-columns:1fr}.valuation-banner{align-items:flex-start}.docs-card{padding:19px}}
 </style>
 </head>
 <body>
@@ -38,12 +51,13 @@
       <button class="nav-btn" data-page="tracking"><span class="nav-ico">⌁</span> 價格追蹤</button>
       <button class="nav-btn" data-page="settings"><span class="nav-ico">⚙</span> 策略設定</button>
       <button class="nav-btn" data-page="data"><span class="nav-ico">⇩</span> 資料匯入與備份</button>
+      <button class="nav-btn" data-page="about"><span class="nav-ico">ⓘ</span> 更新與儲存說明</button>
     </nav>
-    <div class="sidebar-bottom"><div class="offline-pill"><span class="offline-led"></span><span><b>本機離線模式</b><br/>無自動交易・無即時報價</span></div><div class="sidebar-foot">© 2026 股票移動停利停損管理</div></div>
+    <div class="sidebar-bottom"><div class="offline-pill"><span class="offline-led"></span><span><b>本機離線模式</b><br/>無自動交易・無即時報價</span></div><div class="sidebar-foot">© 2026 投資風控中心 Trade Compass</div></div>
   </aside>
   <div class="mobile-shade" id="shade"></div>
   <div class="main-wrap">
-    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● 離線版 v1.1</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
+    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● 離線版 v1.2</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
     <main class="content" id="main"></main>
   </div>
 </div>
@@ -103,18 +117,26 @@ const FinanceCore = (() => {
     }
     return items;
   }
-  function totals(transactions,quotes,date,settings=defaults){
+  function totals(transactions,quotes,date,settings=defaults,manualPrices=[]){
     const l=ledger(transactions,date), tracks=allTrackers(transactions,quotes,settings);
     const positions=[];let cost=0,value=0,realized=0,knownCost=0,unknownCount=0;
     for (const [symbol,p] of l.positions.entries()){
       realized+=p.realized;
       if(p.shares <= 0) continue;
+      // A manual reference price is ONLY for valuation. It never creates a fake OHLC bar
+      // and therefore never triggers a trailing-stop alert or modifies the peak price.
       const series=tracks.filter(q=>q.symbol===symbol && q.date<=date && q.position.shares>0 && q.position.cycle===p.cycle);
-      const last=series.length?series[series.length-1]:null;
-      const market=last?last.close*p.shares:null;
+      const lastTracked=series.length?series[series.length-1]:null;
+      const quick=(Array.isArray(manualPrices)?manualPrices:[])
+        .filter(q=>q.symbol===symbol && q.date<=date && q.date>=p.cycleStart && Number(q.price)>0)
+        .sort((a,b)=>a.date.localeCompare(b.date)).at(-1);
+      const useManual=!!quick && (!lastTracked || quick.date>=lastTracked.date);
+      const latest=useManual?{symbol,date:quick.date,close:Number(quick.price),manual:true}:lastTracked;
+      const market=latest?latest.close*p.shares:null;
       cost+=p.cost;
       if(market!==null){value+=market;knownCost+=p.cost;} else unknownCount++;
-      positions.push({...p,latest:last,market,pnl:market===null?null:market-p.cost});
+      positions.push({...p,latest,lastTracked,market,pnl:market===null?null:market-p.cost,
+        pnlRate:market===null||!p.cost?null:(market-p.cost)/p.cost*100});
     }
     positions.sort((a,b)=>b.cost-a.cost);
     return {positions,cost,value,pnl:value-knownCost,realized,unknownCount,tracks};
@@ -167,9 +189,9 @@ const CathayCore=(()=>{
 'use strict';
 const C=FinanceCore, F=CathayCore, STORAGE='trailing-stop-tw-web-v1';
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
-const initial=()=>({version:1,settings:{...C.defaults},transactions:[],quotes:[],cathay:{...F.defaults}});
+const initial=()=>({version:2,settings:{...C.defaults},transactions:[],quotes:[],manualPrices:[],lastBackupAt:null,cathay:{...F.defaults}});
 let db;let persisted=true;
-try{const raw=localStorage.getItem(STORAGE);db=raw?JSON.parse(raw):initial();db={...initial(),...db,settings:{...C.defaults,...(db.settings||{})},cathay:{...F.defaults,...(db.cathay||{})}};}catch(err){db=initial();persisted=false;}
+try{const raw=localStorage.getItem(STORAGE);db=raw?JSON.parse(raw):initial();db={...initial(),...db,settings:{...C.defaults,...(db.settings||{})},cathay:{...F.defaults,...(db.cathay||{})},manualPrices:Array.isArray(db.manualPrices)?db.manualPrices:[]};}catch(err){db=initial();persisted=false;}
 let active='overview',asOf=today(),stockFilter='',rowSearch='',toastTimer,editing=null;
 const num=(v,d=2)=>Number(v||0).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});
 const money=(v,d=0)=>Number(v||0).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});
@@ -184,8 +206,8 @@ const genid=()=>`${Date.now().toString(36)}_${Math.random().toString(36).slice(2
 function save(){try{localStorage.setItem(STORAGE,JSON.stringify(db));persisted=true;}catch(err){persisted=false;}render();}
 function notify(msg){const el=$('#toast');if(!el)return;el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3400);}
 const nameOf=s=>{const recent=[...db.transactions].reverse().find(t=>t.symbol===s&&t.name);return recent?.name||s;};
-const holdings=()=>C.totals(db.transactions,db.quotes,asOf,db.settings);
-function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算'})[active];}
+const holdings=()=>C.totals(db.transactions,db.quotes,asOf,db.settings,db.manualPrices);
+function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明'})[active];}
 function head(eyebrow,title,sub,buttons='') {return `<div class="head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${sub}</p></div><div class="actions">${buttons}</div></div>`;}
 function pill(status){if(status.includes('觸及'))return `<span class="tag red">● ${E(status)}</span>`;if(status==='移動停利中')return `<span class="tag mint">● 移動停利中</span>`;if(status==='未啟動')return `<span class="tag gold">○ 未啟動</span>`;return `<span class="tag slate">${E(status||'—')}</span>`;}
 function empty(title,desc,action=''){return `<div class="empty-hero"><div class="empty-icon">⌁</div><h3>${title}</h3><p>${desc}</p>${action}</div>`;}
@@ -196,12 +218,14 @@ function sparkline(series,height=100){const data=series.filter(q=>Number.isFinit
 function formatShares(v){return Number(v||0).toLocaleString('zh-TW',{maximumFractionDigits:6});}
 function overview(){const data=holdings();const evaluated=data.positions.filter(x=>x.latest).length;
  let s=head('PORTFOLIO OVERVIEW','我的投資總覽','跨日期買進自動合併成本，依每日最高／最低／收盤價追蹤停損停利。',`<label class="filter-row"> <span class="small muted">查詢日期</span><input id="asOf" class="field date" type="date" value="${asOf}" /></label><button class="btn primary" data-action="newtrade">＋ 新增交易</button>`);
- s+=`<div class="stats">${metric('持股總成本',asMoney(data.cost),'依買賣紀錄計算，含買進手續費','accent')}${metric('已報價持股市值',asMoney(data.value),data.unknownCount?`${data.unknownCount} 檔尚無有效收盤價，未計入市值`:`${evaluated} 檔已納入市值`,'blue')}${metric('未實現損益',`<span class="${cls(data.pnl)}">${signed(data.pnl)} 元</span>`,data.unknownCount?'僅計有收盤價的持股':'尚未扣除未來賣出交易費用','gold')}${metric('已實現損益',`<span class="${cls(data.realized)}">${signed(data.realized)} 元</span>`,'依賣出紀錄，已扣除賣出手續費與交易稅','red')}</div>`;
- s+=`<div class="panel"><div class="panel-head"><div><h2 class="panel-title">目前持股</h2><p class="panel-sub">以 ${dateLabel(asOf)} 為基準・平均成本會隨加碼更新</p></div><button class="btn sm" data-nav="transactions">全部交易紀錄 →</button></div>`;
+ s+=`<div class="stats">${metric('持股總成本',asMoney(data.cost),'依買賣紀錄計算，含買進手續費','accent')}${metric('已報價持股市值',asMoney(data.value),data.unknownCount?`${data.unknownCount} 檔尚無手動價格，未計入市值`:`${evaluated} 檔已納入市值`,'blue')}${metric('未實現損益',`<span class="${cls(data.pnl)}">${signed(data.pnl)} 元</span>`,data.unknownCount?'僅計有手動價格的持股；不含無報價者':'依手動價格估值，未扣未來賣出費稅','gold')}${metric('已實現損益',`<span class="${cls(data.realized)}">${signed(data.realized)} 元</span>`,'依賣出紀錄，已扣除賣出手續費與交易稅','red')}</div>`;
+ s+=`<div class="valuation-banner"><div><strong>ⓘ 報價需要自行更新</strong><p>下方市值與未實現損益以各股票最後一筆、且不晚於查詢日期的手動行情或參考價估算；每檔股票會標示價格日期。<br>這不是即時報價；只輸入「參考價」不會改變移動停利停損警示。</p></div><button class="btn sm" data-nav="about">查看更新與儲存說明 →</button></div>`;
+ if(db.transactions.length && (!db.lastBackupAt || (Date.now()-Date.parse(db.lastBackupAt))/86400000>=30))s+=`<div class="notice-banner">💾 <b>備份提醒：</b>${db.lastBackupAt?'上次點選備份已超過 30 天':'尚未記錄完整 JSON 備份'}。請到「資料匯入與備份」下載檔案，確認檔案已實際儲存後再清除任何資料。 <button class="btn sm" data-nav="data">立即備份</button></div>`;
+ s+=`<div class="panel"><div class="panel-head"><div><h2 class="panel-title">目前持股</h2><p class="panel-sub">截至 ${dateLabel(asOf)}・各檔顯示獨立未實現損益及最後價格日期</p></div><button class="btn sm" data-nav="transactions">全部交易紀錄 →</button></div>`;
  if(!db.transactions.length)s+=empty('開始記錄你的第一筆交易','5 月 2 日買入、5 月 3 日再加碼，到了 5 月 4 日就能看到合併後的平均成本。',`<button class="btn primary" data-action="demo">▶ 載入試用範例</button> <button class="btn" data-action="newtrade">＋ 輸入我的交易</button>`);
  else if(!data.positions.length)s+=`<div class="no-data"><strong>所選日期沒有持股</strong><p>可更換查詢日期，或新增買進交易。</p></div>`;
- else{s+=`<div class="table-wrap"><table class="data-table"><thead><tr><th>股票</th><th class="num">股數</th><th class="num">每股成本</th><th class="num">總成本</th><th class="num">最近收盤</th><th class="num">未實現損益</th><th>停損／停利警示</th><th></th></tr></thead><tbody>`;
- for(const p of data.positions){s+=`<tr><td><div class="stock-name">${E(nameOf(p.symbol))}</div><div class="stock-code">${E(p.symbol)}</div></td><td class="num">${formatShares(p.shares)}</td><td class="num strong">${num(p.avg,4)}</td><td class="num">${money(p.cost)}</td><td class="num">${p.latest?num(p.latest.close):'—'}</td><td class="num ${cls(p.pnl)}">${p.pnl===null?'—':signed(p.pnl)}</td><td>${p.latest?pill(p.latest.status):pill('尚未追蹤')}</td><td><button class="btn sm" data-openstock="${E(p.symbol)}">查看 →</button></td></tr>`;}
+ else{s+=`<div class="table-wrap"><table class="data-table"><thead><tr><th>股票</th><th class="num">股數</th><th class="num">每股成本</th><th class="num">總成本</th><th class="num">估值參考價／日期</th><th class="num">未實現損益／報酬率</th><th>停損／停利警示</th><th></th></tr></thead><tbody>`;
+ for(const p of data.positions){s+=`<tr><td><div class="stock-name">${E(nameOf(p.symbol))}</div><div class="stock-code">${E(p.symbol)}</div></td><td class="num">${formatShares(p.shares)}</td><td class="num strong">${num(p.avg,4)}</td><td class="num">${money(p.cost)}</td><td class="num">${p.latest?`<b>${num(p.latest.close)}</b><div class="val-secondary">${dateLabel(p.latest.date)}</div><span class="quote-chip">${p.latest.manual?'手動參考價':'每日高低收行情'}</span>`:'<span class="tag gold">待輸入價格</span>'}</td><td class="num ${cls(p.pnl)}">${p.pnl===null?'—':`<div class="val-pnl">${signed(p.pnl)} 元<span class="percent">${rate(p.pnlRate)}</span></div>`}</td><td>${p.lastTracked?pill(p.lastTracked.status):pill('尚未追蹤')}</td><td><div class="table-actions"><button class="btn sm primary" data-price="${E(p.symbol)}">更新價格</button><button class="btn sm ghost" data-openstock="${E(p.symbol)}">查看 →</button></div></td></tr>`;}
  s+=`</tbody></table></div>`;}s+='</div>';
  const alertItems=data.tracks.filter(q=>q.date<=asOf && q.status.includes('觸及') && q.position.shares>0).slice(-4).reverse();
  s+=`<div class="lower-grid"><section class="panel"><div class="panel-head"><div><h2 class="panel-title">近期價格追蹤</h2><p class="panel-sub">根據你手動輸入的行情，不會自動連線報價</p></div><button class="btn sm" data-action="newquote">＋ 輸入行情</button></div>`;
@@ -291,11 +315,31 @@ function cathayPage(){
 function dataPage(){const storageNotice=persisted?'目前資料已儲存在本裝置瀏覽器':'瀏覽器禁止保存資料，請務必使用匯出備份';
  let s=head('DATA MANAGEMENT','資料匯入與備份','可匯入原始 Excel、CSV 或先前備份的 JSON；全部資料僅在你的瀏覽器本機計算。');
  s+=`<div class="notice-banner"><b>${persisted?'● 本機儲存啟用':'⚠ 本機儲存不可用'}</b>　${storageNotice}。如更換瀏覽器、裝置或清除網站資料，紀錄可能無法保留，請定期下載 JSON 備份。</div>`;
- s+=`<div class="data-cards"><section class="panel data-card"><h3>📥 匯入既有資料</h3><p>支援移動停利追蹤 Excel（含交易明細工作表）、本工具 CSV 或 JSON 備份。國泰 2.8 折試算功能請直接使用左側獨立頁面。匯入 Excel / JSON 前會確認是否覆蓋現有資料。</p><div class="actions"><label class="btn primary upload-label">匯入 Excel<input type="file" id="xlsxImport" hidden accept=".xlsx" /></label><label class="btn upload-label">匯入 CSV<input type="file" id="csvImport" hidden accept=".csv,text/csv" /></label><label class="btn upload-label">還原 JSON<input type="file" id="jsonImport" hidden accept=".json,application/json" /></label></div></section><section class="panel data-card"><h3>💾 匯出與安全備份</h3><p>JSON 會完整保存所有交易、行情、停利設定與國泰損益試算設定。CSV 可用 Excel 開啟或自行另存；兩份 CSV 分別是交易與追蹤行情。</p><div class="actions"><button class="btn primary" data-action="exportjson">下載完整備份</button><button class="btn" data-action="exporttrades">交易 CSV</button><button class="btn" data-action="exportquotes">行情 CSV</button></div></section><section class="panel data-card"><h3>🔎 資料筆數</h3><p>方便核對匯入狀態。已儲存資料以每個瀏覽器與網站位置為單位，沒有跨裝置同步。</p><div class="detail-items"><div class="detail-item"><span>交易紀錄</span><strong>${db.transactions.length} 筆</strong></div><div class="detail-item"><span>價格追蹤</span><strong>${db.quotes.length} 筆</strong></div><div class="detail-item"><span>不同股票</span><strong>${new Set(db.transactions.map(t=>t.symbol)).size} 檔</strong></div></div></section><section class="panel data-card"><h3>🧪 示範與資料重設</h3><p>可載入 0050 跨日買進測試資料。示範與清空操作都會先顯示確認，避免不小心覆蓋交易紀錄。</p><div class="actions"><button class="btn" data-action="demo">載入示範資料</button><button class="btn danger" data-action="clearall">清空所有資料</button></div></section></div>`;
- s+=`<div class="panel mt16 strategy-panel"><h2 class="panel-title">資料處理與隱私</h2><ul class="bullet-notes"><li>資料保存在本機瀏覽器，不會傳送至伺服器；網站不需註冊或連線，也不提供即時股票報價。</li><li>匯入 Excel 會讀取「交易明細」與「交易追蹤表」的已輸入值，公式計算欄位不會當成資料匯入。</li><li>CSV 的日期請使用 YYYY-MM-DD、YYYY/MM/DD 或 Excel 日期數值；股票代號請保留完整 0，例如 0050。</li><li>本工具使用成本平均法，不包含配息、拆併股、資本減資與稅務申報等特殊處理。</li></ul></div>`;
+ s+=`<div class="data-cards"><section class="panel data-card"><h3>📥 匯入既有資料</h3><p>支援移動停利追蹤 Excel（含交易明細工作表）、本工具 CSV 或 JSON 備份。國泰 2.8 折試算功能請直接使用左側獨立頁面。匯入 Excel / JSON 前會確認是否覆蓋現有資料。</p><div class="actions"><label class="btn primary upload-label">匯入 Excel<input type="file" id="xlsxImport" hidden accept=".xlsx" /></label><label class="btn upload-label">匯入 CSV<input type="file" id="csvImport" hidden accept=".csv,text/csv" /></label><label class="btn upload-label">還原 JSON<input type="file" id="jsonImport" hidden accept=".json,application/json" /></label></div></section><section class="panel data-card"><h3>💾 匯出與安全備份</h3><p>JSON 會完整保存所有交易、每日行情、手動參考價、停利設定與國泰損益試算設定。CSV 可用 Excel 開啟或自行另存；兩份 CSV 分別是交易與追蹤行情。</p><div class="actions"><button class="btn primary" data-action="exportjson">下載完整備份</button><button class="btn" data-action="exporttrades">交易 CSV</button><button class="btn" data-action="exportquotes">行情 CSV</button></div></section><section class="panel data-card"><h3>🔎 資料筆數</h3><p>方便核對匯入狀態。已儲存資料以目前裝置、瀏覽器設定檔與網站網址為單位，不會跨裝置同步。</p><div class="detail-items"><div class="detail-item"><span>交易紀錄</span><strong>${db.transactions.length} 筆</strong></div><div class="detail-item"><span>價格追蹤</span><strong>${db.quotes.length} 筆</strong></div><div class="detail-item"><span>手動參考價</span><strong>${db.manualPrices.length} 筆</strong></div><div class="detail-item"><span>最近點選 JSON 備份</span><strong>${db.lastBackupAt?dateLabel(db.lastBackupAt.slice(0,10)):'尚未記錄'}</strong></div><div class="detail-item"><span>不同股票</span><strong>${new Set(db.transactions.map(t=>t.symbol)).size} 檔</strong></div></div></section><section class="panel data-card"><h3>🧪 示範與資料重設</h3><p>可載入 0050 跨日買進測試資料。清空會刪除本裝置的交易、參考價格、行情與設定；請先備份並確認檔案可用。</p><div class="actions"><button class="btn" data-action="demo">載入示範資料</button><button class="btn danger" data-action="clearall">清空所有資料</button></div></section></div>`;
+ if(db.manualPrices.length){
+  s+=`<section class="panel mt16"><div class="panel-head"><div><h2 class="panel-title">手動參考價格紀錄</h2><p class="panel-sub">只影響估值，不影響高低價及停利停損；輸入錯誤可刪除後重新記錄。</p></div></div><div class="table-wrap"><table class="data-table"><thead><tr><th>日期</th><th>股票</th><th class="num">參考價</th><th>操作</th></tr></thead><tbody>`;
+  for(const p of db.manualPrices.slice().sort((a,b)=>b.date.localeCompare(a.date))){s+=`<tr><td>${dateLabel(p.date)}</td><td>${E(nameOf(p.symbol))} (${E(p.symbol)})</td><td class="num">${num(p.price)}</td><td><button class="btn sm danger" data-delprice="${E(p.id)}">刪除價格</button></td></tr>`;}
+  s+='</tbody></table></div></section>';
+ }
+ s+=`<div class="panel mt16 strategy-panel"><h2 class="panel-title">資料處理與隱私</h2><ul class="bullet-notes"><li>交易與試算資料使用本機瀏覽器 localStorage 儲存；GitHub Pages 只公開網站程式，不會接收你輸入的交易紀錄。關閉分頁或電腦通常不會刪除，但清除網站資料、無痕視窗關閉、換瀏覽器或裝置都可能無法取回。</li><li>匯入 Excel 會讀取「交易明細」與「交易追蹤表」的已輸入值，公式計算欄位不會當成資料匯入。</li><li>CSV 的日期請使用 YYYY-MM-DD、YYYY/MM/DD 或 Excel 日期數值；股票代號請保留完整 0，例如 0050。</li><li>每月建議下載 JSON 備份；個人電腦不要定期直接清除網站資料。公用電腦用完後，先確認備份再清除。只輸入收盤／參考價不影響移動停利與停損，該功能需完整每日行情。</li></ul></div>`;
  return s;
 }
-function render(){const idmap={overview:'overview',transactions:'transactions',tracking:'tracking',settings:'settings',data:'data',cathay:'cathay'};document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===active);b.setAttribute('aria-current',b.dataset.page===active?'page':'false');});$('#breadcrumbCurrent').textContent=navTitle();const main=$('#main');main.innerHTML=({overview,transactions,tracking,settings,data:dataPage,cathay:cathayPage})[active]();document.title=`${navTitle()}｜移動停利停損管理`;}
+
+function aboutPage(){
+ let s=head('ABOUT TRADE COMPASS','版本更新與資料儲存說明','投資風控中心 Trade Compass｜功能更新、個資儲存位置、備份與清理原則。',`<button class="btn primary" data-nav="data">前往資料備份</button>`);
+ s+=`<div class="docs-hero"><div class="eyebrow" style="color:#83ede0">TRADE COMPASS · VERSION 1.2</div><h2>投資風控中心</h2><p>集中管理台股交易成本、各檔持股未實現損益、移動停利停損與國泰證券損益試算。本工具沒有自動抓取報價、沒有券商連線，也不會自動下單。</p><div class="chip" style="display:inline-block">最後更新：2026/11/13</div></div>`;
+ s+=`<div class="docs-grid">
+ <section class="panel docs-card"><h3>🆕 版本更新紀錄</h3><ul><li><b>v1.2｜2026/11/13：</b>持股清單新增每檔未實現損益金額與報酬率；顯示各檔最後價格日期及來源，可單獨更新日期／參考價格；保留上方總損益；加入備份提醒與資料儲存說明。</li><li><b>v1.1：</b>加入國泰證券 2.8 折損益試算，支援帶入持股、手續費及交易稅估算。</li><li><b>v1.0：</b>跨日買賣成本、交易紀錄、每日高低收盤價格追蹤、移動停利停損、JSON/CSV 備份。</li></ul></section>
+ <section class="panel docs-card"><h3>📍 資料實際存放在哪裡？</h3><p><b>存在目前使用裝置的瀏覽器 localStorage，而不是 GitHub 雲端資料庫。</b>例如在 Windows 電腦 Chrome 輸入的交易，會留在那台電腦的 Chrome 使用者設定檔中；Edge、其他電腦、手機不會自動看到。</p><p>瀏覽器關閉後通常仍會保留，但刪除網站資料、重設設定檔、無痕模式結束，或裝置故障都可能造成資料遺失。GitHub 專案是公開網頁程式，不應上傳真實交易備份。</p></section>
+ <section class="panel docs-card"><h3>💾 換裝置或定期備份</h3><ol class="docs-steps"><li>在原電腦點「資料匯入與備份 → 下載完整備份（JSON）」。</li><li>確認檔案已下載並妥善存放，不要把內含交易明細的 JSON 公開在 GitHub。</li><li>在新電腦或手機開啟同一網站，點「還原 JSON」並選擇備份檔，即可轉移交易與價格資料。</li><li>建議<b>至少每月備份一次</b>，每次大量修改交易後也備份。</li></ol></section>
+ <section class="panel docs-card"><h3>🧹 清除與隱私注意事項</h3><p><b>不要在個人電腦定期清除網站資料。</b>清除 localStorage 可能連買賣成本、報價及試算設定一起刪掉；定期備份才是最重要的維護。若使用公用電腦或不再使用本工具，先備份後再清除網站資料。</p><p>「清空所有資料」會移除本網站儲存的交易紀錄與價格資訊，且無法自行復原。網站程式公開不代表本機輸入的個人交易紀錄公開。</p></section>
+ <section class="panel docs-card"><h3>📈 價格日期與損益計算</h3><p>「目前持股」會選取截至查詢日、且在目前持股週期內的<b>最後一筆有效價格</b>。如果同一天既有每日行情又有手動參考價，以手動參考價作為估值。個股未實現損益＝價格 × 持有股數 − 持股成本；總表是各檔已有報價的損益加總。</p><p>若未更新價格，畫面不會有即時性；請自行確認每檔股票標示的日期。未實現損益<b>未扣除未來賣出手續費與交易稅</b>。只有完整最高／最低／收盤行情才會用於停利停損判讀。</p></section>
+ <section class="panel docs-card"><h3>ℹ️ 使用限制</h3><p>本工具不提供買賣建議或券商同步。股票分割、現金股利、減資、配股等特殊交易不會自動調整；交易稅、券商手續費及最低收費請以實際成交回報為準。</p><p>網站版本更新不等於行情自動更新。升級網頁前，建議先下載完整 JSON 備份，並保持原網站網址與同一瀏覽器設定檔，以便沿用既有資料。</p></section>
+ </div>`;
+ return s;
+}
+
+function render(){const idmap={overview:'overview',transactions:'transactions',tracking:'tracking',settings:'settings',data:'data',cathay:'cathay',about:'about'};document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===active);b.setAttribute('aria-current',b.dataset.page===active?'page':'false');});$('#breadcrumbCurrent').textContent=navTitle();const main=$('#main');main.innerHTML=({overview,transactions,tracking,settings,data:dataPage,cathay:cathayPage,about:aboutPage})[active]();document.title=`${navTitle()}｜移動停利停損管理`;}
 function openModal(kind,item=null){editing={kind,id:item?.id||null};const trade=kind==='trade';const v=item||{};const heading=trade?(item?'編輯交易紀錄':'新增交易紀錄'):(item?'編輯每日行情':'新增每日行情');
  const fields=trade?`<div class="form-group"><label for="mdate">成交日期 *</label><input id="mdate" type="date" class="field" required value="${E(v.date||today())}" /></div><div class="form-group"><label for="msymbol">股票代號 *</label><input id="msymbol" class="field" maxlength="20" placeholder="例如 0050" required value="${E(v.symbol||'')}" /></div><div class="form-group"><label for="mname">股票名稱（選填）</label><input id="mname" class="field" maxlength="60" placeholder="例如 元大台灣50" value="${E(v.name||'')}" /></div><div class="form-group"><label for="mside">方向 *</label><select class="field" id="mside"><option value="buy" ${v.side!=='sell'?'selected':''}>買進／加碼</option><option value="sell" ${v.side==='sell'?'selected':''}>賣出／減碼</option></select></div><div class="form-group"><label for="mshares">成交股數 *</label><input id="mshares" type="number" class="field" min="0.000001" step="any" required placeholder="100" value="${v.shares??''}" /></div><div class="form-group"><label for="mprice">每股成交價 *</label><input id="mprice" type="number" class="field" min="0.000001" step="any" required placeholder="100.00" value="${v.price??''}" /></div><div class="form-group"><label for="mfee">手續費（元）</label><input id="mfee" type="number" class="field" min="0" step="any" value="${v.fee??0}" /></div><div class="form-group"><label for="mtax">交易稅（元）</label><input id="mtax" type="number" class="field" min="0" step="any" value="${v.tax??0}" /></div><div class="form-group full"><label for="mnote">備註（選填）</label><input id="mnote" class="field" maxlength="200" placeholder="例如 回檔加碼" value="${E(v.note||'')}" /></div>`
  :`<div class="form-group"><label for="mdate">追蹤日期 *</label><input id="mdate" class="field" type="date" required value="${E(v.date||today())}" /></div><div class="form-group"><label for="msymbol">股票代號 *</label><input id="msymbol" class="field" maxlength="20" placeholder="例如 0050" required value="${E(v.symbol||stockFilter||'')}" /></div><div class="form-group"><label for="mhigh">當日最高價 *</label><input id="mhigh" type="number" class="field" min="0.000001" step="any" required value="${v.high??''}" /></div><div class="form-group"><label for="mlow">當日最低價 *</label><input id="mlow" type="number" class="field" min="0.000001" step="any" required value="${v.low??''}" /></div><div class="form-group full"><label for="mclose">當日收盤價 *</label><input id="mclose" type="number" class="field" min="0.000001" step="any" required value="${v.close??''}" /></div>`;
@@ -303,6 +347,25 @@ function openModal(kind,item=null){editing={kind,id:item?.id||null};const trade=
  $('#modalRoot').innerHTML=`<div class="modal-mask" id="modalMask"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal-head"><h2 id="modalTitle">${heading}</h2><button class="close" aria-label="關閉視窗" data-action="closemodal">×</button></div><form id="editForm"><div class="modal-body"><div class="form-grid">${fields}</div><div class="tip-box mt16">${help}</div><div id="formError" class="alert mt16" hidden></div></div><div class="modal-foot"><button class="btn" type="button" data-action="closemodal">取消</button><button class="btn primary" type="submit">${item?'儲存修改':'新增紀錄'}</button></div></form></div></div>`;
  $('#editForm').addEventListener('submit',submitModal);$('#modalMask').addEventListener('click',e=>{if(e.target.id==='modalMask')closeModal()});$('#mdate').focus();
 }
+
+function openPriceModal(symbol){
+ const p=C.snapshot(db.transactions,symbol,asOf);
+ if(!(p.shares>0)){notify('所選日期這檔股票沒有持股，請先確認查詢日期');return;}
+ const current=db.manualPrices.find(x=>x.symbol===symbol&&x.date===asOf);
+ $('#modalRoot').innerHTML=`<div class="modal-mask" id="modalMask"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="priceTitle"><div class="modal-head"><h2 id="priceTitle">更新 ${E(nameOf(symbol))}（${E(symbol)}）參考價</h2><button class="close" data-action="closemodal" aria-label="關閉">×</button></div><form id="priceForm"><div class="modal-body"><div class="form-grid"><div class="form-group"><label for="priceDate">價格所屬日期 *</label><input id="priceDate" class="field" type="date" required value="${asOf}" /></div><div class="form-group"><label for="priceValue">每股參考價（元）*</label><input id="priceValue" class="field" type="number" min="0.000001" step="any" placeholder="輸入實際查得的價格" required value="${current?E(current.price):''}" /></div></div><div class="tip-box mt16">此處只記錄你自行查得的「日期＋價格」，用於目前持股的市值與未實現損益；不會自動抓報價，也不會把參考價當成當日最高或最低價。若要計算移動停利停損，請到「價格追蹤」輸入完整每日行情。</div><div id="formError" class="alert mt16" hidden></div></div><div class="modal-foot"><button type="button" class="btn" data-action="closemodal">取消</button><button type="submit" class="btn primary">儲存參考價</button></div></form></div></div>`;
+ $('#priceForm').addEventListener('submit',e=>{e.preventDefault();const date=$('#priceDate').value,price=Number($('#priceValue').value);if(!C.validDate(date)||!Number.isFinite(price)||!(price>0)){formError('請輸入有效日期與大於零的每股價格。');return;}
+  if(date>today()&&!confirm('這筆價格日期在今天之後，確定要儲存為未來日期嗎？'))return;
+  const snap=C.snapshot(db.transactions,symbol,date);
+  if(!(snap.shares>0)){formError('這檔股票在該日期沒有持股，請改成持有期間的價格日期。');return;}
+  const index=db.manualPrices.findIndex(x=>x.symbol===symbol&&x.date===date);
+  const item={id:index>=0?db.manualPrices[index].id:genid(),date,symbol,price,updatedAt:new Date().toISOString()};
+  if(index>=0)db.manualPrices[index]=item;else db.manualPrices.push(item);
+  $('#modalRoot').innerHTML='';save();notify(`已儲存 ${symbol} ${date} 參考價 ${price} 元`);
+ });
+ $('#modalMask').addEventListener('click',e=>{if(e.target.id==='modalMask')closeModal()});
+ $('#priceValue').focus();
+}
+
 function closeModal(){$('#modalRoot').innerHTML='';editing=null;}
 function formError(text){const el=$('#formError');el.hidden=false;el.textContent=text;}
 function submitModal(e){e.preventDefault();const trade=editing?.kind==='trade';const o={id:editing.id||genid(),date:$('#mdate').value,symbol:C.normSymbol($('#msymbol').value)};
@@ -318,6 +381,7 @@ function deleteEntry(type,id){const t=type==='trade'?db.transactions:db.quotes;c
  if(type==='trade'){const arr=db.transactions.filter(q=>q.id!==id);const invalid=C.ledger(arr).errors;if(invalid.length){alert(`刪除後會造成其他交易紀錄無法計算：${invalid[0]}。請先修改相關賣出紀錄。`);return;}db.transactions=arr;}else db.quotes=db.quotes.filter(q=>q.id!==id);save();notify('紀錄已刪除');}
 function demo(){if((db.transactions.length||db.quotes.length)&&!confirm('載入範例會覆蓋現有的交易與追蹤資料。請先匯出 JSON 備份。確定繼續？'))return;
  db.transactions=[{id:'d1',date:'2026-05-02',symbol:'0050',name:'元大台灣50（示範）',side:'buy',shares:100,price:100,fee:0,tax:0,note:'示範：第一次買進'},{id:'d2',date:'2026-05-03',symbol:'0050',name:'元大台灣50（示範）',side:'buy',shares:200,price:110,fee:0,tax:0,note:'示範：不同日期加碼'},{id:'d3',date:'2026-05-06',symbol:'0050',name:'元大台灣50（示範）',side:'sell',shares:100,price:120,fee:0,tax:0,note:'示範：部分賣出後均價不變'}];
+ db.manualPrices=[];
  db.quotes=[{id:'q1',date:'2026-05-04',symbol:'0050',high:114,low:108,close:112},{id:'q2',date:'2026-05-05',symbol:'0050',high:118,low:113,close:116},{id:'q3',date:'2026-05-06',symbol:'0050',high:121,low:115,close:118},{id:'q4',date:'2026-05-07',symbol:'0050',high:122,low:114,close:116}];
  asOf='2026-05-07';active='overview';stockFilter='';save();notify('示範資料已載入：5/4 平均成本 106.67 元');}
 function download(name,contents,mime='application/json;charset=utf-8'){const blob=new Blob([contents],{type:mime});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);}
@@ -349,8 +413,9 @@ function rowToData(rows){if(!rows.length)return {transactions:[],quotes:[],skipp
  else{const high=Number(get(r,['最高價','今日最高價','high'])),low=Number(get(r,['最低價','今日最低價','low'])),close=Number(get(r,['收盤價','今日收盤價','close']));if(!(low>0&&low<=close&&close<=high)){skipped++;continue;}quotes.push({id:genid(),date,symbol,high,low,close});}
  }
  return {transactions,quotes,skipped};}
-function importJSONFile(json){if(!json||!Array.isArray(json.transactions)||!Array.isArray(json.quotes))throw Error('JSON 格式不符，缺少交易或行情資料。');const newDb={...initial(),...json,settings:{...C.defaults,...(json.settings||{})},cathay:{...F.defaults,...(json.cathay||{})}};
+function importJSONFile(json){if(!json||!Array.isArray(json.transactions)||!Array.isArray(json.quotes))throw Error('JSON 格式不符，缺少交易或行情資料。');const newDb={...initial(),...json,settings:{...C.defaults,...(json.settings||{})},cathay:{...F.defaults,...(json.cathay||{})},manualPrices:Array.isArray(json.manualPrices)?json.manualPrices:[]};
  if(C.ledger(newDb.transactions).errors.length)throw Error('匯入交易內容有數量或格式錯誤。');
+ if(newDb.manualPrices.some(x=>!x||!C.validDate(x.date)||!x.symbol||!Number.isFinite(Number(x.price))||!(Number(x.price)>0)))throw Error('手動參考價包含無效日期、股票或價格。');
  if(!confirm(`匯入 JSON 備份會取代目前 ${db.transactions.length} 筆交易與 ${db.quotes.length} 筆行情。確定以新資料覆蓋嗎？`))return;
  db=newDb;save();notify(`已還原 ${db.transactions.length} 筆交易、${db.quotes.length} 筆行情`);}
 function importCSVFile(text){const parsed=rowToData(parseCSV(text));const arr=parsed.transactions.length?'transactions':'quotes';const incoming=parsed[arr];if(!incoming.length)throw Error('CSV 沒有可辨識的資料列。請使用本工具匯出的格式。');
@@ -388,10 +453,12 @@ async function importExcel(file){const zip=await unzipXlsx(await file.arrayBuffe
  if(!confirm(`Excel 讀取結果：${transactions.length} 筆交易、${quotes.length} 筆行情，略過 ${skipped} 筆不完整資料。\n\n匯入會覆蓋目前網站中的資料；建議先匯出 JSON 備份。要繼續嗎？`))return;
  db={version:1,settings,transactions,quotes,cathay:{...(db.cathay||F.defaults)}};save();notify(`已從 Excel 匯入 ${transactions.length} 筆交易與 ${quotes.length} 筆行情`);}
 async function handleImport(e){const file=e.target.files?.[0];if(!file)return;try{if(e.target.id==='jsonImport')importJSONFile(JSON.parse(await file.text()));else if(e.target.id==='csvImport')importCSVFile(await file.text());else await importExcel(file);}catch(err){console.error(err);alert('匯入失敗：'+err.message);}finally{e.target.value='';}}
-function act(a){if(a==='newtrade')openModal('trade');else if(a==='newquote')openModal('quote');else if(a==='closemodal')closeModal();else if(a==='demo')demo();else if(a==='exportjson')download('移動停利停損_完整備份_'+today()+'.json',JSON.stringify(db,null,2));else if(a==='exporttrades')csvDownload('trades');else if(a==='exportquotes')csvDownload('quotes');else if(a==='clearall'){if(confirm('確定清空全部交易、行情與設定？此操作無法復原。建議先下載 JSON 備份。')){db=initial();save();notify('已清空資料');}}else if(a==='resetsettings'){if(confirm('要將停損 5%、啟動 10%、回檔 5% 恢復預設嗎？')){db.settings={...C.defaults};save();notify('已恢復預設策略');}}else if(a==='savesettings'){const settings={stop:Number($('#setStop').value),activation:Number($('#setActivation').value),trail:Number($('#setTrail').value)};if(!(settings.stop>0&&settings.stop<100&&settings.activation>0&&settings.activation<=200&&settings.trail>0&&settings.trail<100)){alert('請填入有效百分比：初始停損與回檔 0～100% 之間；啟動率 0～200%。');return;}db.settings=settings;save();notify('策略參數已更新，歷史追蹤已重新計算');}}
-document.addEventListener('click',e=>{const p=e.target.closest('[data-page],[data-nav],[data-action],[data-edittrade],[data-deltrade],[data-editquote],[data-delquote],[data-openstock]');if(!p)return;
+function act(a){if(a==='newtrade')openModal('trade');else if(a==='newquote')openModal('quote');else if(a==='closemodal')closeModal();else if(a==='demo')demo();else if(a==='exportjson'){db.lastBackupAt=new Date().toISOString();try{localStorage.setItem(STORAGE,JSON.stringify(db));}catch(err){persisted=false;}download('投資風控中心_完整備份_'+today()+'.json',JSON.stringify(db,null,2));render();notify('已啟動備份下載，請確認檔案已保存');}else if(a==='exporttrades')csvDownload('trades');else if(a==='exportquotes')csvDownload('quotes');else if(a==='clearall'){if(confirm('確定清空本機全部交易、每日行情、手動價格及設定？此操作無法復原。請務必先下載 JSON 備份並確認檔案可用。')){db=initial();save();notify('已清空資料');}}else if(a==='resetsettings'){if(confirm('要將停損 5%、啟動 10%、回檔 5% 恢復預設嗎？')){db.settings={...C.defaults};save();notify('已恢復預設策略');}}else if(a==='savesettings'){const settings={stop:Number($('#setStop').value),activation:Number($('#setActivation').value),trail:Number($('#setTrail').value)};if(!(settings.stop>0&&settings.stop<100&&settings.activation>0&&settings.activation<=200&&settings.trail>0&&settings.trail<100)){alert('請填入有效百分比：初始停損與回檔 0～100% 之間；啟動率 0～200%。');return;}db.settings=settings;save();notify('策略參數已更新，歷史追蹤已重新計算');}}
+document.addEventListener('click',e=>{const p=e.target.closest('[data-page],[data-nav],[data-action],[data-price],[data-delprice],[data-edittrade],[data-deltrade],[data-editquote],[data-delquote],[data-openstock]');if(!p)return;
  if(p.dataset.page||p.dataset.nav){active=p.dataset.page||p.dataset.nav;rowSearch='';render();$('#sidebar').classList.remove('open');$('#shade').classList.remove('open');window.scrollTo({top:0,behavior:'instant'});}
  if(p.dataset.action)act(p.dataset.action);
+ if(p.dataset.price)openPriceModal(p.dataset.price);
+ if(p.dataset.delprice){const entry=db.manualPrices.find(x=>x.id===p.dataset.delprice);if(entry&&confirm(`要刪除 ${entry.date} ${entry.symbol} 的手動參考價 ${entry.price} 元嗎？`)){db.manualPrices=db.manualPrices.filter(x=>x.id!==entry.id);save();notify('已刪除這筆參考價格');}}
  if(p.dataset.edittrade){const t=db.transactions.find(x=>x.id===p.dataset.edittrade);if(t)openModal('trade',t);}if(p.dataset.deltrade)deleteEntry('trade',p.dataset.deltrade);
  if(p.dataset.editquote){const q=db.quotes.find(x=>x.id===p.dataset.editquote);if(q)openModal('quote',q);}if(p.dataset.delquote)deleteEntry('quote',p.dataset.delquote);
  if(p.dataset.openstock){stockFilter=p.dataset.openstock;active='tracking';render();window.scrollTo(0,0);}
