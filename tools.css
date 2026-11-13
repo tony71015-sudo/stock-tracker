@@ -1,0 +1,31 @@
+/* Trade Compass v1.4 add-on UI */
+.tc-pad{padding:23px 24px;margin-bottom:18px}
+.tc-section-head{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:15px}
+.tc-flex{display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.tc-flex>label,.tc-extra>label{display:flex;align-items:center;gap:7px;flex-wrap:wrap;color:#65798d;font-size:12px;font-weight:700}
+.tc-number{width:95px}
+.tc-check{background:#e8f8f5;padding:10px 13px;border-radius:8px;color:#227b71!important;cursor:pointer}
+.tc-check input{accent-color:#0e9a8d}
+.tc-row-input{max-width:190px;width:100%;text-align:right}
+.tc-extra-list{display:grid;gap:10px}
+.tc-extra{padding:12px;display:flex;gap:13px;align-items:center;flex-wrap:wrap;background:#f7fafc;border-radius:10px}
+.tc-extra input[type=number]{width:140px}
+.tc-results{grid-template-columns:repeat(3,minmax(0,1fr))}
+.tc-legend{display:flex;justify-content:flex-end;gap:18px;font-size:12px;color:#65798d;margin:10px 0}
+.tc-legend span{display:flex;align-items:center;gap:5px}.tc-legend i{display:inline-block;width:13px;height:4px;border-radius:4px}
+.tc-searchbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.tc-searchbar .field{min-width:210px}
+.tc-statgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin:16px 0}
+.tc-stat{padding:19px}.tc-stat small{display:block;color:#7e91a3;margin-bottom:9px}.tc-stat b{font-size:23px;font-variant-numeric:tabular-nums}
+.tc-sources{font-size:12px;line-height:1.8;color:#667f91}.tc-sources a{color:#098d81;text-decoration:underline}
+.tc-note{font-size:12px;color:#718698;line-height:1.75}.tc-strong{font-weight:800}
+.tc-filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.tc-filter-row label{font-size:12px;color:#667b91;font-weight:700}
+.tc-badge{font-size:11px;border-radius:12px;background:#e5f5f1;color:#087c70;font-weight:800;padding:3px 8px;white-space:nowrap}
+.tc-empty{background:#fff9ee;border:1px solid #f4e1bc;color:#927548;padding:12px;border-radius:9px;line-height:1.75}
+.tc-chart path{vector-effect:non-scaling-stroke}
+.tc-table-scroll{overflow-x:auto;max-height:650px;overflow-y:auto}
+.tc-upload{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:10px 0}
+.tc-highlight{background:#ebf8f6}
+@media(max-width:1040px){.tc-statgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.tc-results{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.tc-pad{padding:17px 14px}.tc-statgrid,.tc-results{grid-template-columns:1fr}.tc-row-input{min-width:110px}.tc-extra label{width:100%}.tc-extra input[type=number]{width:100%}}
