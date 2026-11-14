@@ -60,6 +60,42 @@
 <script src="institutional.js" defer></script>
 <script src="etf_simulator.js" defer></script>
 <script src="market.js" defer></script>
+<script>
+/* Trade Compass v1.4.9 - IndexedDB public holdings cache.
+ * This cache never requests issuer websites: it stores already verified published
+ * snapshots under ETF/date keys. Clearing it never removes private trades.
+ */
+(function(global){'use strict';
+const DB='trade-compass-official-etf-cache-v1', VERSION=1;
+function open(){return new Promise((resolve,reject)=>{
+ if(!global.indexedDB){reject(Error('瀏覽器不支援 IndexedDB'));return;}
+ const request=global.indexedDB.open(DB,VERSION);
+ request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains('snapshots'))db.createObjectStore('snapshots',{keyPath:'key'});if(!db.objectStoreNames.contains('manifests'))db.createObjectStore('manifests',{keyPath:'code'});};
+ request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error||Error('IndexedDB 開啟失敗'));
+ });}
+async function tx(store,mode,act){const db=await open();try{return await new Promise((resolve,reject)=>{
+ const transaction=db.transaction(store,mode),os=transaction.objectStore(store);
+ let result;const request=act(os);if(request){request.onsuccess=()=>result=request.result;request.onerror=()=>reject(request.error||Error('IndexedDB 操作失敗'));}
+ transaction.oncomplete=()=>resolve(result);transaction.onerror=()=>reject(transaction.error||Error('IndexedDB 寫入失敗'));
+ });}finally{db.close();}}
+const key=(code,date)=>String(code).toUpperCase()+':'+date;
+async function getSnapshot(code,date){const result=await tx('snapshots','readonly',os=>os.get(key(code,date)));return result?.snapshot||null;}
+async function putSnapshot(code,snapshot){if(!/^[0-9A-Z]{4,8}$/.test(code)||!/^\d{4}-\d{2}-\d{2}$/.test(snapshot?.date))throw Error('ETF／日期格式錯誤');return tx('snapshots','readwrite',os=>os.put({key:key(code,snapshot.date),code,date:snapshot.date,snapshot,storedAt:new Date().toISOString()}));}
+async function getManifest(code){const r=await tx('manifests','readonly',os=>os.get(code));return r?.manifest||null;}
+async function putManifest(code,manifest){return tx('manifests','readwrite',os=>os.put({code,manifest,storedAt:new Date().toISOString()}));}
+async function stats(){const db=await open();try{return await new Promise((resolve,reject)=>{
+ const t=db.transaction(['snapshots','manifests'],'readonly'),s=t.objectStore('snapshots'),m=t.objectStore('manifests');let entries=0,approx=0,indexes=0;
+ const r=s.openCursor();r.onsuccess=()=>{const c=r.result;if(c){entries++;approx+=new Blob([JSON.stringify(c.value.snapshot)]).size;c.continue();}};
+ const cr=m.count();cr.onsuccess=()=>indexes=cr.result;
+ t.oncomplete=()=>resolve({entries,indexes,bytes:approx});t.onerror=()=>reject(t.error);
+ });}finally{db.close();}}
+async function clear(){const db=await open();try{return await new Promise((resolve,reject)=>{
+ const t=db.transaction(['snapshots','manifests'],'readwrite');t.objectStore('snapshots').clear();t.objectStore('manifests').clear();t.oncomplete=resolve;t.onerror=()=>reject(t.error);
+ });}finally{db.close();}}
+global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,stats,clear};
+})(window);
+
+</script>
 <script src="active_etf.js" defer></script>
 </head>
 <body>
@@ -84,7 +120,7 @@
   </aside>
   <div class="mobile-shade" id="shade"></div>
   <div class="main-wrap">
-    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● Trade Compass v1.4.6</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
+    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● Trade Compass v1.4.9</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
     <main class="content" id="main"></main>
   </div>
 </div>
