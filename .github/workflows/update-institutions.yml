@@ -68,7 +68,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/institutional data/market data/active-etf/latest.json
+          git add -A -- data/institutional data/market data/active-etf
           if ! git diff --cached --quiet; then
             git commit -m "data: refresh public market and ETF datasets"
             git push
@@ -78,8 +78,8 @@ jobs:
       - name: Stage public website assets
         run: |
           mkdir -p _site/data
-          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js tools.css _site/
-          cp -R data/institutional data/market data/active-etf _site/data/
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js tools.css _site/
+          cp -R data/institutional data/market data/active-etf data/index-etf _site/data/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

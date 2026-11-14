@@ -74,8 +74,8 @@ jobs:
       - name: Stage public site
         run: |
           mkdir -p _site/data
-          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js tools.css _site/
-          cp -R data/institutional data/market data/active-etf _site/data/
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js tools.css _site/
+          cp -R data/institutional data/market data/active-etf data/index-etf _site/data/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

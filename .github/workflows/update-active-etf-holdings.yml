@@ -1,4 +1,4 @@
-name: 更新統一投信主動 ETF 每日完整持股並發布網站（00981A、00403A、00988A）
+name: 更新統一投信 00981A 每日完整持股並發布網站
 
 on:
   schedule:
@@ -41,9 +41,9 @@ jobs:
         run: |
           cd /tmp/tw-active-etf-crawler
           timeout 600 python main.py --ezmoney
-      - name: Validate and import EZMoney 00981A, 00403A, 00988A holdings
+      - name: Validate and import latest 00981A issuer holdings
         run: |
-          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A --code 00403A --code 00988A
+          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A
       - name: Commit validated public snapshots only
         shell: bash
         run: |
@@ -54,7 +54,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No new portfolio snapshots.'
           else
-            git commit -m 'data: archive EZMoney active ETF issuer portfolios'
+            git commit -m 'data: archive EZMoney 00981A issuer portfolio snapshot'
             for attempt in 1 2 3; do
               git fetch origin main
               git rebase origin/main
@@ -65,8 +65,8 @@ jobs:
       - name: Stage public website assets
         run: |
           mkdir -p _site/data
-          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js tools.css _site/
-          cp -R data/institutional data/market data/active-etf _site/data/
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js tools.css _site/
+          cp -R data/institutional data/market data/active-etf data/index-etf _site/data/
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
