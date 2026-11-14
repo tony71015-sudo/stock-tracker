@@ -1,0 +1,77 @@
+name: 更新統一投信 00981A 每日完整持股並發布網站
+
+on:
+  schedule:
+    # Taiwan time 21:25 on weekdays. Official issuer disclosures may be delayed.
+    - cron: '25 13 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: trade-compass-pages
+  cancel-in-progress: false
+
+jobs:
+  import-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download open-source issuer crawler
+        run: |
+          git clone --depth 1 https://github.com/SheenArtem/TWActiveETFCrawler.git /tmp/tw-active-etf-crawler
+          # This is a third-party MIT-licensed project; it is not an official issuer API.
+      - name: Install crawler dependencies
+        run: |
+          python -m pip install -r /tmp/tw-active-etf-crawler/requirements.txt
+          python -m playwright install chromium
+      - name: Fetch EZMoney actual holdings from issuer website
+        run: |
+          cd /tmp/tw-active-etf-crawler
+          timeout 600 python main.py --ezmoney
+      - name: Validate and import latest 00981A issuer holdings
+        run: |
+          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A
+      - name: Commit validated public snapshots only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- data/active-etf
+          if git diff --cached --quiet; then
+            echo 'No new portfolio snapshots.'
+          else
+            git commit -m 'data: archive EZMoney 00981A issuer portfolio snapshot'
+            for attempt in 1 2 3; do
+              git fetch origin main
+              git rebase origin/main
+              if git push origin HEAD:main; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+            done
+          fi
+      - name: Stage public website assets
+        run: |
+          mkdir -p _site/data
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js tools.css _site/
+          cp -R data/institutional data/market data/active-etf _site/data/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: '_site'
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
