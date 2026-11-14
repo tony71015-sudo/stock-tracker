@@ -88,7 +88,9 @@ def ingest(db_path:Path, codes=('00981A',)):
     result={}; updated=0
     with connection(db_path) as db:
         for code in codes:
-            if code not in PORTFOLIO_CODES:raise BridgeError('Unsupported code '+code)
+            code = str(code).strip().upper()
+            if code not in PORTFOLIO_CODES:
+                raise BridgeError('Unsupported code ' + repr(code))
             # ETF issuer allowlist is authoritative. The website catalog is optional
             # display metadata and must not prevent a permitted import.
             fund_name=(catalog.get(code) or {}).get('name') or FUND_NAMES[code]
