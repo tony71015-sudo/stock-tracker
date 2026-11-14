@@ -1,7 +1,23 @@
-Trade Compass v1.5.7 — fix other active ETF importer skipping all as unlisted.
+Trade Compass - Active ETF concurrent Git rebase conflict fix
 
-Replace only scripts/import_other_active_etfs.py in your GitHub repository, commit to main, then manually run update-other-active-etfs.yml. No workflow or HTML replacement necessary.
+Replaces/adds exactly two files:
+  .github/workflows/update-other-active-etfs.yml  (replace)
+  scripts/merge_active_etf_status.py                (add)
 
-The importer will add missing supported ETF entries to data/active-etf/catalog.json, retaining the existing catalog, and import only eligible snapshots. PCF-only funds remain excluded; structural checks do not independently verify actual fund holdings.
+Why: multiple GitHub Actions jobs modify data/active-etf/status.json.
+The earlier workflow aborted rebase when the remote main changed.
 
-Verify Actions log: CATALOG_RECOVERED, ETF_RESULT status saved/retained/unavailable rather than unlisted. GitHub Actions success does not guarantee verified holdings.
+How:
+1. Back up the existing workflow from GitHub.
+2. Upload these two files to the matching GitHub repository paths.
+3. Commit to main.
+4. Actions > update-other-active-etfs > Run workflow (new run, not Re-run jobs).
+5. Verify Commit public ETF snapshots only and Deploy GitHub Pages.
+
+Safety:
+- Does not force push.
+- Resolves only the status.json structured metadata conflict.
+- Fails on unexpected conflicts.
+- Keeps ETF records with more available historical dates, and merges disjoint ETF codes.
+- Does NOT modify portfolio data or certify third-party data.
+- This patch does not resolve other issuers' PCF or invalid asset classifications.
