@@ -107,12 +107,39 @@ jobs:
           git add -A -- data/active-etf
           if ! git diff --cached --quiet; then
             git commit -m 'data: archive other active ETF issuer holdings'
-            for attempt in 1 2 3; do
+            for attempt in 1 2 3 4 5; do
+              echo "Sync attempt $attempt"
               git fetch origin main
-              if ! git rebase origin/main; then git rebase --abort; exit 1; fi
-              if git push origin HEAD:main; then break; fi
-              if [ "$attempt" -eq 3 ]; then exit 1; fi
+              if ! git rebase origin/main; then
+                # Only the known, structured status metadata can be auto-merged.
+                # An unexpected file conflict must be reviewed, never discarded.
+                conflicts=$(git diff --name-only --diff-filter=U)
+                if [ "$conflicts" != 'data/active-etf/status.json' ]; then
+                  echo "::error::Unexpected rebase conflict: $conflicts"
+                  git rebase --abort || true
+                  exit 1
+                fi
+                if ! python scripts/merge_active_etf_status.py; then
+                  git rebase --abort || true
+                  exit 1
+                fi
+                git add data/active-etf/status.json
+                if ! GIT_EDITOR=true git rebase --continue; then
+                  git rebase --abort || true
+                  exit 1
+                fi
+              fi
+              if git push origin HEAD:main; then
+                echo 'Snapshot commit pushed successfully'
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo '::error::Remote branch kept changing; no force push attempted'
+                exit 1
+              fi
             done
+          else
+            echo 'No changed ETF snapshots to commit'
           fi
       - name: Stage public site
         run: |
