@@ -219,6 +219,34 @@ function portfolioRows(previous,current){
      weightDelta:weightPrev===null||weightCurr===null?null:weightCurr-weightPrev,status};
  }).sort((x,y)=>Math.abs(y.delta??0)-Math.abs(x.delta??0)||x.code.localeCompare(y.code));
 }
+// Cash, deposits, and futures are not equities. Never infer TWD or contract
+// units when the upstream scraper omitted unit metadata.
+function assetPositionRows(previous,current){
+ const a=new Map((previous?.assetPositions||[]).map(x=>[x.type+':'+x.id,x]));
+ const b=new Map((current?.assetPositions||[]).map(x=>[x.type+':'+x.id,x]));
+ return [...new Set([...a.keys(),...b.keys()])].map(key=>{
+  const before=a.get(key),after=b.get(key),pos=after||before;
+  const w0=before?.weight??null,w1=after?.weight??null;
+  const comparable=!!before&&!!after&&!!before.unitVerified&&!!after.unitVerified&&before.unit===after.unit;
+  const q0=comparable?before.reportedValue:null,q1=comparable?after.reportedValue:null;
+  return {type:pos.type,name:pos.name,id:pos.id,unit:comparable?pos.unit:'來源單位待核實',
+   before:q0,after:q1,delta:comparable&&q0!=null&&q1!=null?q1-q0:null,
+   weightBefore:w0,weightAfter:w1,weightDelta:w0!=null&&w1!=null?w1-w0:null};
+ });
+}
+function assetPositionsHTML(prev,curr,canCompare){
+ const records=curr?.assetPositions||[];
+ if(!records.length)return '';
+ const names={cash:'現金／存款',futures:'期貨',margin:'保證金',receivable_payable:'應收／應付款'};
+ const rows=canCompare?assetPositionRows(prev,curr):records.map(x=>({type:x.type,name:x.name,id:x.id,
+   after:x.unitVerified?x.reportedValue:null,unit:x.unitVerified?x.unit:'來源單位待核實',
+   before:null,delta:null,weightBefore:null,weightAfter:x.weight,weightDelta:null}));
+ let output='<h3 class="panel-title" style="margin-top:24px">非股票資產｜現金、存款、期貨、保證金</h3>';
+ output+='<p class="tc-note">僅在兩日期、同一部位、單位明確且一致時比較金額或期貨口數；未標單位者僅比較權重，不將來源數值誤認為新臺幣或口數。缺少部位不直接視為零。</p>';
+ output+='<div class="table-wrap"><table class="data-table"><thead><tr><th>類別／名稱</th><th>單位</th><th class="num">基準值</th><th class="num">查詢值</th><th class="num">變化</th><th class="num">權重變化</th></tr></thead><tbody>';
+ for(const x of rows){output+=`<tr><td>${esc(names[x.type]||x.type)}｜${esc(x.name)}</td><td>${esc(x.unit)}</td><td class="num">${x.before==null?'—':fmt(x.before)}</td><td class="num">${x.after==null?'—':fmt(x.after)}</td><td class="num">${x.delta==null?'—':(x.delta>0?'+':'')+fmt(x.delta)}</td><td class="num">${x.weightDelta==null?'—':(x.weightDelta>0?'+':'')+fmt(x.weightDelta,2)+' pp'}</td></tr>`;}
+ output+='</tbody></table></div>';return output;
+}
 function csvEscape(x){const t=String(x??'');return /[",\r\n]/.test(t)?'"'+t.replaceAll('"','""')+'"':t;}
 function comparisonCSV(code,previous,current){
  const header=['ETF代號','比較日期','查詢日期','股票代號','股票名稱','前日股數','當日股數','股數增減','前日權重%','當日權重%','權重變動百分點','分類'];
@@ -316,6 +344,7 @@ function html(){if(!state.loaded&&!state.loading)queueMicrotask(load);
  for(const x of portfolioRows(prev,curr)){s+=`<tr><td><button class="tc-code-btn" data-active-quote="${esc(x.code)}">${esc(x.code)}</button> ${esc(x.name)}</td><td class="num">${fmt(x.before)}</td><td class="num">${fmt(x.after)}</td><td class="num ${x.delta>0?'positive':x.delta<0?'negative':''}">${x.delta==null?'—':(x.delta>0?'+':'')+fmt(x.delta)}</td><td class="num">${x.weightBefore==null?'—':fmt(x.weightBefore,2)+'%'}</td><td class="num">${x.weightAfter==null?'—':fmt(x.weightAfter,2)+'%'}</td><td class="num ${x.weightDelta>0?'positive':x.weightDelta<0?'negative':''}">${x.weightDelta==null?'—':(x.weightDelta>0?'+':'')+fmt(x.weightDelta,2)+' pp'}</td></tr>`;}
  s+='</tbody></table></div>';
  }
+ s+=assetPositionsHTML(prev,curr,canCompare);
  s+=`<h3 class="panel-title" style="margin-top:23px">${esc(curr.date)} 持股清單</h3><div class="table-wrap tc-table-scroll"><table class="data-table"><thead><tr><th>股票代號</th><th>股票名稱</th><th class="num">持有股數</th><th class="num">權重</th></tr></thead><tbody>`;
  for(const x of curr.holdings.slice().sort((a,b)=>(b.weight??0)-(a.weight??0))){s+=`<tr><td><button class="tc-code-btn" data-active-quote="${esc(x.code)}" title="查詢個股收盤價">${esc(x.code)}</button></td><td>${esc(x.name)}</td><td class="num">${fmt(x.shares)}</td><td class="num">${x.weight==null?'—':fmt(x.weight,2)+'%'}</td></tr>`;}
  s+='</tbody></table></div>';
