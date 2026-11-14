@@ -11,7 +11,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&
 const fmt=(x,d=0)=>x==null?'—':Number(x).toLocaleString('zh-TW',{maximumFractionDigits:d,minimumFractionDigits:d});
 const validDate=x=>/^\d{4}-\d{2}-\d{2}$/.test(x)&&!Number.isNaN(Date.parse(x+'T12:00:00'));
 const validCode=x=>/^[0-9A-Z]{4,8}$/.test(x);
-const validSecurityId=x=>/^[0-9A-Z]{4,20}$/.test(String(x||'').toUpperCase());
+const validSecurityId=x=>/^[A-Z0-9][A-Z0-9.\-]{0,15}(?: [A-Z]{2,5})?$/.test(String(x||'').trim().toUpperCase());
 const compact=s=>String(s||'').trim().toUpperCase();
 const positive=v=>Number.isFinite(Number(v))&&Number(v)>=0;
 const safeNum=s=>{if(s===undefined||s===null||String(s).trim()==='')return null;const x=Number(String(s).replaceAll(',','').replace('%','').trim());return Number.isFinite(x)&&x>=0?x:null;};
