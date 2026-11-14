@@ -243,7 +243,7 @@ def run():
             # date. Do not hide those public snapshots as 'not configured'.
             index_dates=read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])
             published=read(STATUS,{'etfs':{}}).get('etfs',{}).get(code,{})
-            if index_dates and published.get('status')=='ok' and published.get('source'):
+            if index_dates and published.get('status') in ('ok','stale','not_verified') and published.get('source'):
                 summary[code]={**base,**published,'date':index_dates[0],
                                'historicalDates':len(index_dates)}
             else:
