@@ -1,17 +1,6 @@
-Trade Compass — GitHub Pages recovery (2026-11-15)
+Trade Compass: recovery of update-institutions Git rebase error
 
-Only REPLACE this GitHub file through GitHub website:
-.github/workflows/update-institutions.yml
-
-1. GitHub > Code > .github > workflows > update-institutions.yml
-2. Edit with pencil; replace contents using the file in this ZIP; Commit to main.
-3. Actions > 更新三大法人、股票行情並發布網站 > Run workflow (mode=auto).
-4. Check https://tony71015-sudo.github.io/stock-tracker/index_etf_returns.js
-
-Important:
-- Does not attempt to modify GitHub workflows from inside Actions.
-- Adds index_etf_returns.js to public site assets when present.
-- Skips missing optional datasets.
-- Only commits institutional and market data; active ETF data are maintained by their separate workflows.
-- Does NOT create index ETF holdings datasets.
-- If workflow still fails, capture the exact failing step; do not reinstall automatic workflow patch.
+Replace only .github/workflows/update-institutions.yml on GitHub main.
+This repair stops update_active_etf.py running in the institutional workflow (ETF snapshots have their own jobs), isolates stray generated files before rebase, and preserves GitHub Pages staging of index_etf_returns.js.
+After manual upload/commit, run 更新三大法人、股票行情並發布網站 with mode=auto. Verify Commit public market datasets and Deploy GitHub Pages are green. No bootstrap needed.
+Note: If the source repository has diverged since the last supplied version, review the YAML diff before overwriting.
