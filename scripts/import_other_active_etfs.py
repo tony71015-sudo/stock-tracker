@@ -14,28 +14,69 @@ from pathlib import Path
 import re
 import sqlite3
 import sys
-from import_ezmoney_sqlite import (select_rows, normalize_etf_code, BridgeError,
-    connection, DATE_RE, snap_from_rows)
+from import_ezmoney_sqlite import (select_rows, BridgeError,
+    connection, DATE_RE)
 from update_active_etf import archive_entry, read, write, BASE, LATEST, STATUS, HISTORY, CATALOG
 
 UPSTREAM = 'https://github.com/SheenArtem/TWActiveETFCrawler'
+# Upstream README identifies these issuer collectors as PCF / creation basket feeds.
+# Do not present them as full-fund actual-position trade changes.
+PCF_ONLY = {'00401A', '00996A', '00407A', '00410A'}
 SUPPORTED = {'00980A': {'issuer': '野村', 'domain': 'nomurafunds.com.tw'}, '00985A': {'issuer': '野村', 'domain': 'nomurafunds.com.tw'}, '00999A': {'issuer': '野村', 'domain': 'nomurafunds.com.tw'}, '00982A': {'issuer': '群益', 'domain': 'capitalfund.com.tw'}, '00992A': {'issuer': '群益', 'domain': 'capitalfund.com.tw'}, '00991A': {'issuer': '復華', 'domain': 'fhtrust.com.tw'}, '00995A': {'issuer': '中信', 'domain': 'ctbcinvestments.com'}, '00406A': {'issuer': '中信', 'domain': 'ctbcinvestments.com'}, '00994A': {'issuer': '第一金', 'domain': 'fsitc.com.tw'}, '00408A': {'issuer': '第一金', 'domain': 'fsitc.com.tw'}, '00987A': {'issuer': '台新', 'domain': 'tsit.com.tw'}, '00984A': {'issuer': '安聯', 'domain': 'allianzgi.com.tw'}, '00993A': {'issuer': '安聯', 'domain': 'allianzgi.com.tw'}, '00400A': {'issuer': '國泰', 'domain': 'cathaysite.com.tw'}, '00401A': {'issuer': '摩根', 'domain': 'am.jpmorgan.com'}, '00405A': {'issuer': '富邦', 'domain': 'fubon.com'}, '00404A': {'issuer': '聯博', 'domain': 'alliancebernstein.com'}, '00996A': {'issuer': '兆豐', 'domain': 'megafunds.com.tw'}, '00407A': {'issuer': '凱基', 'domain': 'kgifund.com.tw'}, '00410A': {'issuer': '永豐', 'domain': 'sitc.sinopac.com'}}
 
 
 def convert_day(code, date, rows, now=None):
-    """Conservative equity portfolio validation with verified issuer scraped fields.
+    """Validate dated equity holdings without the old 30-day ingestion cap.
 
-    The importer cannot independently prove scraping target is an actual portfolio;
-    provenance is explicitly labeled as unverified until issuer-side spot checking.
+    This checks structural plausibility, NOT whether the issuer file is an
+    actual full-fund portfolio rather than a PCF/creation basket.
     """
-    snap=snap_from_rows(code,date,rows,now=now)
-    snap['source']=UPSTREAM
-    snap['collector']=UPSTREAM
-    snap['issuer']=SUPPORTED[code]['issuer']
-    snap['issuerReferenceDomain']=SUPPORTED[code]['domain']
-    snap['provenance']='upstream_issuer_scraper; independent_official_reconciliation_pending'
-    snap['dataVerification']='structural_validation_only'
-    return snap
+    if code in PCF_ONLY:
+        raise BridgeError('Source is PCF / creation basket, not verified actual fund holdings')
+    now = now or dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
+    if not DATE_RE.fullmatch(date):
+        raise BridgeError('Invalid YYYY-MM-DD date')
+    day = dt.date.fromisoformat(date)
+    if day > now:
+        raise BridgeError('Future disclosure date')
+    if (now - day).days > 500:
+        raise BridgeError('Date more than 500 days old')
+    holdings=[]
+    seen=set()
+    weight_total=0.0
+    symbol_re=re.compile(r'\d{4,6}[A-Z]?')
+    for item in rows:
+        symbol=str(item['stock_code'] or '').strip().upper()
+        if not symbol_re.fullmatch(symbol):
+            raise BridgeError('Unrecognized TW-equity symbol: '+repr(symbol))
+        if symbol in seen:
+            raise BridgeError('Duplicate constituent: '+symbol)
+        seen.add(symbol)
+        try:
+            shares=float(item['shares'])
+            weight=float(item['weight'])
+        except (ValueError,TypeError):
+            raise BridgeError('Missing numeric shares/weight')
+        if not (math.isfinite(shares) and shares>=0 and shares.is_integer()
+                and math.isfinite(weight) and 0<=weight<=100):
+            raise BridgeError('Invalid shares/weight values')
+        name=str(item['stock_name'] or symbol).strip()
+        holdings.append({'code':symbol,'name':name,'shares':int(shares),
+                         'weight':round(weight,5)})
+        weight_total+=weight
+    if not 15 <= len(holdings) <= 200:
+        raise BridgeError('Portfolio incomplete or unusual: '+str(len(holdings))+' constituents')
+    if not 40 <= weight_total <= 103:
+        raise BridgeError('Implausible aggregate equity weight: %.2f%%'%weight_total)
+    return {
+        'date':date,'complete':True,'kind':'actual_portfolio','etf':code,
+        'source':UPSTREAM,'collector':UPSTREAM,
+        'issuer':SUPPORTED[code]['issuer'],
+        'issuerReferenceDomain':SUPPORTED[code]['domain'],
+        'provenance':'upstream_issuer_scraper; independent_official_reconciliation_pending',
+        'dataVerification':'structural_validation_only',
+        'holdings':holdings,'equityWeightTotal':round(weight_total,4),
+    }
 
 
 def ingest(db_path:Path, today=None, max_history_days=240):
@@ -100,7 +141,7 @@ def ingest(db_path:Path, today=None, max_history_days=240):
                     'detail':'暫時無法比較：'+('當次資料未通過完整持股檢查：'+rejected[0] if rejected else '尚未取得可用的完整持股快照'),
                     'comparisonReady':False
                 }
-                report[code]={'status':'unavailable','reason':status['etfs'][code]['detail']}
+                report[code]={'status':'unavailable','reason':status['etfs'][code]['detail'], 'databaseRows':len(rows), 'distinctDates':len(by_date)}
     # Keep other 22 catalog funds and the existing unified records untouched.
     for code, fund in catalog.items():
         if code in SUPPORTED or code in status['etfs']:continue
@@ -114,6 +155,10 @@ def ingest(db_path:Path, today=None, max_history_days=240):
     status['catalogCount']=len(catalog)
     status['updatedSources']=saved_count
     write(LATEST,latest);write(STATUS,status)
+    for code, result in report.items():
+        print('ETF_RESULT', code, result.get('status'), 'dates='+str(result.get('dates',0)),
+              'rows='+str(result.get('databaseRows','?')),
+              'reason='+str(result.get('reason',''))[:140])
     print(json.dumps({'imported':saved_count,'supported':len(SUPPORTED),'results':report},ensure_ascii=False,indent=2))
     return report
 
