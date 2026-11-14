@@ -107,7 +107,7 @@ function render(){if(!state.initialized){state.initialized=true;loadInstitutiona
  html+=`<tr><td><strong>${esc(r.name||r.code)}</strong><div class="stock-code">${esc(r.code)}</div></td><td>${esc(r.status)}</td><td class="num">${fmt(r.sh1)}</td><td class="num">${fmt(r.sh2)}</td><td class="num ${deltaClass}">${sign(r.delta)}</td><td class="num">${r.wdelta===null?'—':sign(r.wdelta,2)+' pp'}</td><td class="num ${a>0?'positive':a<0?'negative':''}">${a===null?'—':sign(a/1000,1)}</td></tr>`;}
  html+=`</tbody></table></div></section>`;}
  html+=`<section class="panel" style="padding:23px;margin-top:18px"><h2 class="panel-title">匯入完整實際持股 CSV（本機保存）</h2><p class="subtitle">表頭須包含 etf,date,code,name,shares,weight；每檔 ETF 每天至少 40 檔成分股。這是手動匯入功能，不是自動官方驗證；PCF 申購籃子與只有前十大持股的資料不可當作完整實際持股。</p><input id="indexImport" type="file" accept=".csv,text/csv" class="field"/><div class="filter-row" style="margin-top:12px"><button id="indexExport" class="btn">備份本機指數 ETF 快照</button><button id="indexClear" class="btn danger">清除本機指數 ETF 快照</button></div></section>`;
- return html;}
+ return html + (window.TradeCompassETFReturns?.html(state.fund)||'');}
 function download(text,filename){const blob=new Blob([text],{type:'application/json;charset=utf-8'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),300);}
 document.addEventListener('change',async e=>{
  const id=e.target?.id;if(!id||!id.startsWith('index'))return;
