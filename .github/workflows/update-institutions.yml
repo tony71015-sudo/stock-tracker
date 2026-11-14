@@ -63,9 +63,8 @@ jobs:
       - name: Fetch official TWSE/TPEx after-close OHLCV and day trading
         run: |
           python scripts/update_market.py || echo '::warning::Stock market snapshot unavailable; showing the previous validated data or an empty warning.'
-      - name: Optional configured official PCF CSV sources
-        run: |
-          python scripts/update_active_etf.py || echo '::warning::Some ETF PCF source updates failed; old validated public snapshots retained.'
+      # Active ETF holdings have their own dedicated workflows.
+      # Do not update data/active-etf here: its uncommitted files block git rebase.
       - name: Commit public market datasets to repository (safe retry)
         shell: bash
         run: |
@@ -75,10 +74,23 @@ jobs:
           # Active ETF snapshots are published by their dedicated workflow.
           # Avoid rewriting their shared status.json from this workflow.
           git add -A -- data/institutional data/market
+          # Defensive isolation: other updaters own active ETF snapshots.
+          # Never try to rebase over changes from an unrelated data pipeline.
+          if [ -n "$(git status --porcelain -- data/active-etf)" ]; then
+            echo '::notice::Discarding transient active ETF edits in this job; dedicated ETF workflows publish these snapshots.'
+            git restore --worktree -- data/active-etf || true
+            git clean -fd -- data/active-etf
+          fi
           if git diff --cached --quiet; then
             echo "Public data unchanged"
           else
-            git commit -m "data: refresh public market and ETF datasets"
+            git commit -m "data: refresh public institutional and market datasets"
+            # If future scripts generate additional untracked/modified files,
+            # isolate them rather than allowing an unsafe rebase or force push.
+            if [ -n "$(git status --porcelain)" ]; then
+              echo '::warning::Other generated files exist; stashing them for this data-only push.'
+              git stash push --include-untracked -m 'temporary unrelated generated data'
+            fi
             for attempt in 1 2 3 4 5; do
               git fetch origin main
               if ! git rebase origin/main; then
