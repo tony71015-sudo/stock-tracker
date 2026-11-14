@@ -39,3 +39,9 @@
 .tc-code-btn{border:0;background:transparent;color:#0c8e83;text-decoration:underline;font-weight:800;cursor:pointer;padding:3px 0}
 .tc-code-btn:hover{color:#086e66}
 @media(max-width:800px){.tc-active-price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tc-active-select{min-width:100%}}
+
+/* v1.4.5 history date pair selector */
+.tc-date-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px}
+.tc-date-controls label{display:grid;gap:7px;font-size:12px;font-weight:750;color:#536b81}
+.tc-date-controls .field{width:100%}.tc-date-chip{margin:3px 4px 3px 0;font-size:11px}
+@media(max-width:820px){.tc-date-controls{grid-template-columns:1fr}}

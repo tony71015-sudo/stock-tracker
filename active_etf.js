@@ -5,7 +5,7 @@ const STORAGE='trade-compass-active-etf-snapshots-v1';
 const catalog = [["00400A","主動國泰動能高息","股票"],["00401A","主動摩根台灣鑫收","股票"],["00402A","主動安聯美國科技","股票"],["00403A","主動統一升級50","股票"],["00404A","主動聯博動能50","股票"],["00405A","主動富邦台灣龍耀","股票"],["00406A","主動中信台灣收益","股票"],["00407A","主動凱基台灣","股票"],["00408A","主動第一金優股息","股票"],["00409A","主動復華全球50","股票"],["00410A","主動永豐科技趨勢","股票"],["00411A","主動統一前沿科技","股票"],["00412A","主動安聯亞半導體","股票"],["00415A","主動群益核心50","股票"],["00980A","主動野村臺灣優選","股票"],["00980D","主動聯博投等入息","債券"],["00981A","主動統一台股增長","股票"],["00981D","主動中信非投等債","債券"],["00982A","主動群益台灣強棒","股票"],["00982D","主動富邦動態入息","債券"],["00983A","主動中信ARK創新","股票"],["00983D","主動富邦複合收益","債券"],["00984A","主動安聯台灣高息","股票"],["00984D","主動聯博全球非投","債券"],["00985A","主動野村台灣50","股票"],["00985D","主動貝萊德優投等","債券"],["00986A","主動台新龍頭成長","股票"],["00986D","主動復華金融債息","債券"],["00987A","主動台新優勢成長","股票"],["00987D","主動統一美債量化","債券"],["00988A","主動統一全球創新","股票"],["00989A","主動摩根美國科技","股票"],["00990A","主動元大AI新經濟","股票"],["00991A","主動復華未來50","股票"],["00992A","主動群益科技創新","股票"],["00993A","主動安聯台灣","股票"],["00994A","主動第一金台股優","股票"],["00995A","主動中信台灣卓越","股票"],["00996A","主動兆豐台灣豐收","股票"],["00997A","主動群益美國增長","股票"],["00998A","主動復華金融股息","股票"],["00999A","主動野村臺灣高息","股票"]];
 const selectList=catalog.map(([code,name])=>[code,name]);
 const ETF_SOURCE='https://www.sitca.org.tw/ROC/SITCA_ETF/etf_bulletin.aspx';
-const state={code:'00981A',filter:'all',search:'',local:{schema:1,snapshots:{}},published:null,loading:false,loaded:false,error:'',showImport:false,stockCode:'2330',stockTerm:''};
+const state={code:'00981A',filter:'all',search:'',local:{schema:1,snapshots:{}},published:null,loading:false,loaded:false,error:'',showImport:false,stockCode:'2330',stockTerm:'',asOfDate:'',compareMode:'previous',compareDate:''};
 try{const raw=localStorage.getItem(STORAGE);if(raw){const x=JSON.parse(raw);if(x?.schema===1&&x.snapshots&&typeof x.snapshots==='object')state.local=x;}}catch(e){state.error='本機快照存取受限制：'+e.message;}
 const esc=s=>String(s??'').replace(/[&<>"']/g,x=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[x]));
 const fmt=(x,d=0)=>x==null?'—':Number(x).toLocaleString('zh-TW',{maximumFractionDigits:d,minimumFractionDigits:d});
@@ -27,6 +27,21 @@ function getSnapshots(code){
  // User-imported record takes precedence if the same date is present.
  const old=map.get(s.date);if(!old||s.origin==='local')map.set(s.date,s);}
  return [...map.values()].sort((a,b)=>b.date.localeCompare(a.date));
+}
+// Exact-date selection: never silently substitute a different day. The "previous" mode
+// compares the last AVAILABLE snapshot, not necessarily the prior stock exchange session.
+function selectSnapshots(snapshots, asOfDate, compareMode='previous', compareDate=''){
+ const latest=snapshots[0];
+ const target=asOfDate||latest?.date||'';
+ const current=snapshots.find(x=>x.date===target)||null;
+ const previous=compareMode==='custom'
+   ?snapshots.find(x=>x.date===compareDate)||null
+   :current?(snapshots.find(x=>x.date<current.date)||null):null;
+ const validOrder=!!(current&&previous&&previous.date<current.date);
+ const verified=validOrder&&!!current.complete&&!!previous.complete;
+ const gaps=validOrder?Math.round((new Date(current.date+'T12:00:00Z')-new Date(previous.date+'T12:00:00Z'))/86400000):null;
+ const comparisonDate=compareMode==='custom'?compareDate:(previous?.date||'');
+ return {current,previous,target,comparisonDate,validOrder,verified,gaps};
 }
 function classify(previous,current){
  if(!previous?.complete||!current?.complete)return [];
@@ -90,8 +105,9 @@ function parseCSV(text,meta){
  return {date:meta.date,source:meta.source.slice(0,180),complete:meta.complete,holdings,importedAt:new Date().toISOString()};
 }
 function html(){if(!state.loaded&&!state.loading)queueMicrotask(load);
- const code=state.code,snapshots=getSnapshots(code),curr=snapshots[0],prev=snapshots[1];
- const canCompare=!!(curr?.complete&&prev?.complete&&curr.date>prev.date);
+ const code=state.code,snapshots=getSnapshots(code);
+ const selection=selectSnapshots(snapshots,state.asOfDate,state.compareMode,state.compareDate);
+ const curr=selection.current,prev=selection.previous,canCompare=selection.verified;
  const changes=canCompare?classify(prev,curr):[];
  const q=window.TradeCompassMarket?.find(code);
  if(window.TradeCompassMarket?.status==='idle')queueMicrotask(()=>window.TradeCompassMarket.load());
@@ -113,11 +129,18 @@ function html(){if(!state.loaded&&!state.loading)queueMicrotask(load);
  if(stockQuote){s+=`<div class="tc-active-price-grid">${[['股票',stockQuote.name+'（'+stockQuote.code+'）'],['資料日',stockQuote.date],['開盤',fmt(stockQuote.open,2)],['最高',fmt(stockQuote.high,2)],['最低',fmt(stockQuote.low,2)],['收盤',fmt(stockQuote.close,2)],['成交股數',fmt(stockQuote.volumeShares)]].map(([k,v])=>`<div><small>${esc(k)}</small><b>${esc(v)}</b></div>`).join('')}</div>`;}
  else{s+=`<div class="tc-note" style="margin-top:12px">${state.stockCode?'查無 '+esc(state.stockCode)+' 的有效盤後股價；請確認官方行情資料日、股票代號及 GitHub Actions 更新狀態。':'請輸入股票代號查詢。'} 未取得資料時不補假價格。</div>`;}
  s+=`</section>`;
- s+=`<section class="panel tc-pad"><div class="tc-section-head"><div><h2 class="panel-title">成分股持有與異動</h2><p class="panel-sub">最新：${esc(curr?.date||'尚無')} ｜ 對比：${esc(prev?.date||'尚無')} ｜ ${curr?.holdings?.length||0} 檔持股</p></div></div>`;
- if(!curr){s+=`<div class="no-data"><strong>尚未取得 ${esc(code)} 的完整每日持股快照</strong><p>請匯入至少兩個不同日期的官方完整 PCF 清單，才可以比較新增、加碼、減碼和清倉。沒有資料時不顯示虛構異動。</p></div>`;}
+ s+=`<section class="panel tc-pad"><div class="tc-section-head"><div><h2 class="panel-title">成分股歷史持有與異動</h2><p class="panel-sub">選擇指定交易日的持股快照，再比較前一次或自訂日期的異動。</p></div></div>
+ <div class="tc-date-controls">
+ <label>查詢持股日期<input id="activeAsOf" type="date" class="field" value="${esc(selection.target)}" aria-label="查詢持股日期"></label>
+ <label>比較方式<select id="activeCompareMode" class="field"><option value="previous" ${state.compareMode==='previous'?'selected':''}>自動：前一份已保存快照</option><option value="custom" ${state.compareMode==='custom'?'selected':''}>手動：指定比較日期</option></select></label>
+ ${state.compareMode==='custom'?`<label>比較基準日<input id="activeCompareDate" type="date" class="field" value="${esc(state.compareDate)}" aria-label="比較基準日"></label>`:`<label>自動找到的基準日<input class="field" value="${esc(selection.comparisonDate||'尚無') }" readonly aria-label="自動基準日期"></label>`}
+ </div>
+ ${snapshots.length?`<p class="tc-note" style="margin:10px 0 13px">已保存 ${snapshots.length} 個日期：${snapshots.map(x=>`<button class="btn sm tc-date-chip" data-active-date="${esc(x.date)}">${esc(x.date)}${x.complete?'':' ⚠'}</button>`).join(' ')} </p>`:`<p class="tc-note" style="margin:10px 0 13px">目前沒有可選的持股快照日期。ETF 代號清單不等於持股資料，須由投信官方完整 PCF 來源取得或匯入。</p>`}
+ <p class="tc-note">查詢日：<b>${esc(selection.target||'未選擇')}</b>｜比較日：<b>${esc(selection.comparisonDate||'尚無')}</b>｜查詢日持股 <b>${curr?.holdings?.length||0}</b> 檔。只有完整快照才可判定新增或清倉。自動模式使用「前一份有保存資料的日期」，未保證是前一交易日。</p>`;
+ if(!curr){s+=`<div class="no-data"><strong>查無 ${esc(code)} 在 ${esc(selection.target||'指定日期')} 的完整持股快照</strong><p>已保存 ${snapshots.length} 個日期，不能將最近日期冒充你查詢的那天。請匯入該交易日的投信官方完整 PCF，或確認自動更新來源是否具備歷史檔。</p><button class="btn sm" data-active-import-toggle>匯入缺少日期的 PCF</button></div>`;}
  else{
- if(!canCompare)s+=`<div class="tc-empty">⚠ ${!prev?'只有一份快照，請再匯入另一交易日':'至少一份快照未確認為完整清單'}，因此不判定新增、加碼、減碼或清倉；仍可查看目前快照。</div>`;
- else s+=`<div class="tc-flex" style="margin:12px 0">${Object.entries(badges).filter(([k])=>!k.startsWith('weight')).map(([k,[text]])=>`<span class="tc-badge">${text} ${changes.filter(x=>x.type===k).length} 檔</span>`).join('')}<span class="fine">${esc(prev.date)} → ${esc(curr.date)}</span></div>`;
+ if(!canCompare){const why=(!prev)?`找不到 ${state.compareMode==='custom'?esc(state.compareDate||'指定比較日期'):'更早日期'} 的快照`:!selection.validOrder?'比較日期必須早於查詢日期':'至少一份快照未確認為完整清單';s+=`<div class="tc-empty">⚠ ${why}。目前只能查看查詢日持股，不進行新增／加碼／減碼／清倉判定。請匯入兩日的官方完整 PCF。</div>`;}
+ else s+=`${selection.gaps>4?`<div class="tc-empty">注意：兩份快照相隔 ${selection.gaps} 個日曆日，期間可能存在未保存的交易日；以下只代表這兩個日期之間的淨變化，不代表每天操作紀錄。</div>`:''}<div class="tc-flex" style="margin:12px 0">${Object.entries(badges).filter(([k])=>!k.startsWith('weight')).map(([k,[text]])=>`<span class="tc-badge">${text} ${changes.filter(x=>x.type===k).length} 檔</span>`).join('')}<span class="fine">${esc(prev.date)} → ${esc(curr.date)}</span></div>`;
  if(canCompare)s+=`<div class="tc-filter-row"><label>分類</label><select class="field" id="activeFilter">${[['all','全部異動'],...Object.entries(badges).map(([key,[name]])=>[key,name])].map(([val,title])=>`<option value="${val}" ${state.filter===val?'selected':''}>${title}</option>`).join('')}</select><label>搜尋</label><input class="field" id="activeSearch" value="${esc(state.search)}" placeholder="股票名稱或代號"></div>`;
  const shown=changes.filter(x=>(state.filter==='all'||x.type===state.filter)&&[x.name,x.code].some(t=>String(t).toLowerCase().includes(state.search.toLowerCase())));
  if(canCompare){s+=`<div class="table-wrap tc-table-scroll"><table class="data-table"><thead><tr><th>代號／名稱</th><th>異動類型</th><th class="num">前次股數</th><th class="num">最新股數</th><th class="num">股數變動</th><th class="num">權重變化</th></tr></thead><tbody>`;
@@ -126,7 +149,7 @@ function html(){if(!state.loaded&&!state.loading)queueMicrotask(load);
  s+=`</tbody></table></div>`;
  if(!shown.length)s+='<p class="tc-note">目前篩選條件沒有符合的異動。</p>';
  }
- s+=`<h3 class="panel-title" style="margin-top:23px">最新持股清單</h3><div class="table-wrap tc-table-scroll"><table class="data-table"><thead><tr><th>股票代號</th><th>股票名稱</th><th class="num">持有股數</th><th class="num">權重</th></tr></thead><tbody>`;
+ s+=`<h3 class="panel-title" style="margin-top:23px">${esc(curr.date)} 持股清單</h3><div class="table-wrap tc-table-scroll"><table class="data-table"><thead><tr><th>股票代號</th><th>股票名稱</th><th class="num">持有股數</th><th class="num">權重</th></tr></thead><tbody>`;
  for(const x of curr.holdings.slice().sort((a,b)=>(b.weight??0)-(a.weight??0))){s+=`<tr><td><button class="tc-code-btn" data-active-quote="${esc(x.code)}" title="查詢個股收盤價">${esc(x.code)}</button></td><td>${esc(x.name)}</td><td class="num">${fmt(x.shares)}</td><td class="num">${x.weight==null?'—':fmt(x.weight,2)+'%'}</td></tr>`;}
  s+='</tbody></table></div>';
  }
@@ -142,12 +165,13 @@ function importFile(file){const el=id=>document.getElementById(id);const date=el
  file.text().then(text=>{
  try{const snap=parseCSV(text,{date,code:state.code,source,complete});if(!state.local.snapshots[state.code])state.local.snapshots[state.code]=[];
  state.local.snapshots[state.code]=state.local.snapshots[state.code].filter(s=>s.date!==date).concat(snap).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,120);
- persist();state.showImport=false;redraw();alert(`已保存 ${snap.holdings.length} 檔 ${date} 持股資料。本機快照不會上傳至 GitHub。`);
+ persist();state.asOfDate=date;state.showImport=false;redraw();alert(`已保存 ${snap.holdings.length} 檔 ${date} 持股資料。本機快照不會上傳至 GitHub。`);
  }catch(e){alert('CSV 匯入失敗：'+e.message);}
  }).catch(e=>alert('無法讀取 CSV：'+e.message));
 }
-document.addEventListener('click',e=>{const b=e.target.closest('[data-active-select],[data-active-refresh],[data-active-import-toggle],[data-active-remove],[data-active-template],[data-active-export],[data-active-stock],[data-active-quote],[data-active-stock-details]');if(!b)return;
- if(b.hasAttribute('data-active-select')){const code=compact(document.getElementById('activeCode')?.value);if(!validCode(code))return alert('請輸入正確的 ETF 股票代號');state.code=code;state.filter='all';state.search='';redraw();}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-active-select],[data-active-refresh],[data-active-import-toggle],[data-active-remove],[data-active-template],[data-active-export],[data-active-stock],[data-active-quote],[data-active-stock-details],[data-active-date]');if(!b)return;
+ if(b.hasAttribute('data-active-select')){const code=compact(document.getElementById('activeCode')?.value);if(!validCode(code))return alert('請輸入正確的 ETF 股票代號');state.code=code;state.asOfDate='';state.compareDate='';state.filter='all';state.search='';redraw();}
+ else if(b.dataset.activeDate){state.asOfDate=b.dataset.activeDate;redraw();}
  else if(b.hasAttribute('data-active-stock')){state.stockCode=compact(document.getElementById('activeStockCode')?.value);redraw();}
  else if(b.dataset.activeQuote){state.stockCode=b.dataset.activeQuote;redraw();document.querySelector('#activeStockCode')?.scrollIntoView({behavior:'smooth',block:'center'});}
  else if(b.hasAttribute('data-active-stock-details')){state.stockCode=compact(document.getElementById('activeStockCode')?.value||state.stockCode);window.TradeCompassBridge?.navigate?.('stockSearch');window.TradeCompassMarket?.select?.(state.stockCode);}
@@ -157,8 +181,8 @@ document.addEventListener('click',e=>{const b=e.target.closest('[data-active-sel
  else if(b.hasAttribute('data-active-template'))download('主動ETF_完整持股CSV範本.csv','\ufeff股票代號,股票名稱,股數,權重\r\n2330,台積電,100000,10.5\r\n2454,聯發科,20000,5.2\r\n');
  else if(b.hasAttribute('data-active-export'))download('TradeCompass_主動ETF快照備份.json',JSON.stringify(state.local,null,2),'application/json');
 });
-document.addEventListener('change',e=>{if(e.target.id==='activePicker'&&e.target.value){state.code=e.target.value;state.filter='all';state.search='';redraw();return;}if(e.target.id==='activeRestoreFile'&&e.target.files?.[0]){const file=e.target.files[0];file.text().then(t=>{const j=JSON.parse(t);if(j.schema!==1||!j.snapshots||typeof j.snapshots!=='object')throw Error('不是本系統匯出的持股快照 JSON');if(!confirm('還原會取代目前瀏覽器的主動式 ETF 持股快照，確定？'))return;state.local=j;persist();redraw();alert('已還原主動式 ETF 快照');}).catch(err=>alert('還原失敗：'+err.message));e.target.value='';}if(e.target.id==='activeFilter'){state.filter=e.target.value;redraw();}if(e.target.id==='activeImportFile'&&e.target.files?.[0]){importFile(e.target.files[0]);e.target.value='';}});
+document.addEventListener('change',e=>{if(e.target.id==='activePicker'&&e.target.value){state.code=e.target.value;state.asOfDate='';state.compareDate='';state.filter='all';state.search='';redraw();return;}if(e.target.id==='activeRestoreFile'&&e.target.files?.[0]){const file=e.target.files[0];file.text().then(t=>{const j=JSON.parse(t);if(j.schema!==1||!j.snapshots||typeof j.snapshots!=='object')throw Error('不是本系統匯出的持股快照 JSON');if(!confirm('還原會取代目前瀏覽器的主動式 ETF 持股快照，確定？'))return;state.local=j;persist();redraw();alert('已還原主動式 ETF 快照');}).catch(err=>alert('還原失敗：'+err.message));e.target.value='';}if(e.target.id==='activeAsOf'){state.asOfDate=e.target.value;redraw();return;}if(e.target.id==='activeCompareMode'){state.compareMode=e.target.value;redraw();return;}if(e.target.id==='activeCompareDate'){state.compareDate=e.target.value;redraw();return;}if(e.target.id==='activeFilter'){state.filter=e.target.value;redraw();}if(e.target.id==='activeImportFile'&&e.target.files?.[0]){importFile(e.target.files[0]);e.target.value='';}});
 document.addEventListener('input',e=>{if(e.target.id==='activeSearch'){state.search=e.target.value;/* no rerender here; avoid input focus jumps */ const table=document.querySelector('.tc-table-scroll');if(table){for(const row of table.querySelectorAll('tbody tr'))row.hidden=!row.textContent.toLowerCase().includes(state.search.toLowerCase());}}});
 document.addEventListener('keydown',e=>{if(e.target.id==='activeStockCode'&&e.key==='Enter'){e.preventDefault();document.querySelector('[data-active-stock]')?.click();}if(e.target.id==='activeCode'&&e.key==='Enter'){e.preventDefault();document.querySelector('[data-active-select]')?.click();}});
-window.TradeCompassActiveETF={html,parseCSV,classify,getSnapshots,catalog,select(code){state.code=code;redraw();}};
+window.TradeCompassActiveETF={html,parseCSV,classify,getSnapshots,selectSnapshots,catalog,select(code){state.code=code;state.asOfDate='';state.compareDate='';redraw();}};
 })();
