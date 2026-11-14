@@ -1,0 +1,43 @@
+name: 安裝主動式 ETF 資料缺漏標示
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: install-active-etf-availability
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+      - name: Install non-destructive status panel into current active ETF script
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          for attempt in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            test -s active_etf.js
+            test -s scripts/active_etf_availability_embed.js
+            if grep -q 'Trade Compass additive diagnostics: public index/status files only' active_etf.js; then
+              echo 'Status module already integrated. Nothing to update.'
+              exit 0
+            fi
+            printf '\n\n' >> active_etf.js
+            cat scripts/active_etf_availability_embed.js >> active_etf.js
+            git add active_etf.js
+            git commit -m 'feat: annotate missing active ETF history from backend'
+            if git push origin HEAD:main; then
+              echo 'Status panel installed in active_etf.js'
+              exit 0
+            fi
+            echo 'Remote changed; retrying with current main ($attempt/5)'
+          done
+          echo 'Unable to publish after five retries; no force push attempted.' >&2
+          exit 1
