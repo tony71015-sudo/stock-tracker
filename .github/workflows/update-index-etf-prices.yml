@@ -1,0 +1,51 @@
+name: 更新指數型 ETF 每日收盤價
+on:
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: '回補自 2024 年起歷史行情（009816 自上市月）'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '30 12 * * 1-5'  # 20:30 Asia/Taipei
+permissions:
+  contents: write
+jobs:
+  update-prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Fetch official daily market close history
+        run: |
+          if [ '${{ inputs.rebuild }}' = 'true' ]; then
+            python scripts/update_index_etf_prices.py --rebuild
+          else
+            python scripts/update_index_etf_prices.py
+          fi
+      - name: Publish prices without forced push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/index-etf/prices
+          if git diff --cached --quiet; then echo 'No changes'; exit 0; fi
+          git commit -m 'data: update official index ETF closing prices'
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo 'Conflict while rebasing price data. Stop rather than overwrite other updates.'
+              exit 1
+            fi
+            if git push origin HEAD:main; then exit 0; fi
+            sleep $((i*3))
+          done
+          echo 'Push still rejected after 5 retries'; exit 1
