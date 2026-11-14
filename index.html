@@ -122,7 +122,7 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
   </aside>
   <div class="mobile-shade" id="shade"></div>
   <div class="main-wrap">
-    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● Trade Compass v1.5.4</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
+    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● Trade Compass v1.5.9</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
     <main class="content" id="main"></main>
   </div>
 </div>
@@ -453,13 +453,23 @@ function dataPage(){const storageNotice=persisted?'目前資料已儲存在本�
 
 function aboutPage(){
  let s=head('ABOUT TRADE COMPASS','版本更新與資料儲存說明','投資風控中心 Trade Compass｜功能更新、個資儲存位置、備份與清理原則。',`<button class="btn primary" data-nav="data">前往資料備份</button>`);
- s+=`<div class="docs-hero"><div class="eyebrow" style="color:#83ede0">TRADE COMPASS · VERSION 1.4.4</div><h2>投資風控中心</h2><p>集中管理台股交易成本、各檔持股未實現損益、移動停利停損與國泰證券損益試算。交易價格仍需自行更新；三大法人公開資料可由 GitHub Actions 定時抓取。無券商連線，也不會自動下單。</p><div class="chip" style="display:inline-block">最後更新：2026/11/13</div></div>`;
+ s+=`<div class="docs-hero"><div class="eyebrow" style="color:#83ede0">TRADE COMPASS · VERSION 1.5.9</div><h2>投資風控中心</h2><p>集中管理台股交易成本、各檔持股未實現損益、移動停利停損與國泰證券損益試算。交易價格仍需自行更新；三大法人公開資料可由 GitHub Actions 定時抓取。無券商連線，也不會自動下單。</p><div class="chip" style="display:inline-block">最後更新：2026/11/15</div></div>`;
  s+=`<div class="docs-grid">
- <section class="panel docs-card"><h3>🆕 版本更新紀錄</h3><ul><li><b>v1.4.2｜2026/11/13：</b>新增盤中停損／停利試算：輸入當前價格即可試算，盤中最高／最低可選填；顯示警示線、觸線判斷、未實現損益和資料時間。盤中快照獨立儲存，不影響正式收盤追蹤及總表。</li><li><b>v1.4.1｜2026/11/13：</b>三大法人籌碼新增上市大盤每日法人買進、賣出與買賣超（億元），支援日期選擇、自營商自行買賣／避險拆分；與個股股數資料分開，資料由證交所 BFI82U 公開日報更新。</li><li><b>v1.4｜2026/11/13：</b>新增 ETF 0～40 年 3%／7%／10% 獲利試算、定期定額與年度加碼、配息再投入／領現比較、行情與當沖／法人查詢、主動式 ETF 完整持股清單快照比較。行情不代表即時報價；主動式 ETF 資料需要已驗證的來源或匯入完整 PCF。</li><li><b>v1.3｜2026/11/13：</b>新增上市與上櫃三大法人籌碼查詢，提供官方資料排程更新、5／10／20／60 個交易日累積買賣超、排行、股票查詢及本機持股對照。法人資料自動更新不等於股價更新；資料可能延遲，需確認來源日期及完整度。</li><li><b>v1.2｜2026/11/13：</b>持股清單新增每檔未實現損益金額與報酬率；顯示各檔最後價格日期及來源，可單獨更新日期／參考價格；保留上方總損益；加入備份提醒與資料儲存說明。</li><li><b>v1.1：</b>加入國泰證券 2.8 折損益試算，支援帶入持股、手續費及交易稅估算。</li><li><b>v1.0：</b>跨日買賣成本、交易紀錄、每日高低收盤價格追蹤、移動停利停損、JSON/CSV 備份。</li></ul></section>
+ <section class="panel docs-card"><h3>🆕 版本更新紀錄</h3><ul><li><b>v1.5.9｜2026/11/15：</b>同步更新網站版本歷程與資料可信度提醒；修正 00994A、00408A 來源中的「股票」分類／小計列被當作股票代號而拒絕匯入的問題。持股、現金、存款、期貨、保證金仍分項處理；是否成功開放比較，需以 GitHub Actions 實際驗證為準。</li>
+<li><b>v1.5.8｜2026/11/15：</b>加入現金／存款／期貨／保證金的分項儲存及比較機制；為 00401A、00996A、00407A、00410A 增加替代來源抓取與驗證候選流程。替代來源是否可用尚待實際驗證，不以 PCF 籃子冒充基金實際持股。</li>
+<li><b>v1.5.7｜2026/11/14：</b>修正網站 ETF 名錄檢查導致的 unlisted 匯入錯誤；GitHub Actions 紀錄顯示 20 檔中 14 檔成功存入歷史快照、6 檔仍未通過驗證。成功存入不代表已完成官方逐筆核對。</li>
+<li><b>v1.5.6｜2026/11/14：</b>其他投信改為依發行商逐家抓取，失敗獨立記錄；擴充歷史匯入範圍並保留已有快照。實際成功數量依每次工作流程日誌為準。</li>
+<li><b>v1.5.5｜2026/11/14：</b>修正 GitHub Pages 發布時缺少選用的 data/index-etf 資料夾造成中斷，並改善自動提交的分支同步與推送衝突處理。</li>
+<li><b>v1.5.4｜2026/11/14：</b>新增指數型 ETF × 三大法人查詢頁，先列 0050、006208、009816，支援個別查外資、投信、自營商籌碼；指數 ETF 官方完整歷史持股自動抓取仍待接通。</li>
+<li><b>v1.5.3｜2026/11/14：</b>增加其他投信主動式 ETF 多檔資料抓取與來源狀態紀錄，沒有可靠完整持股時標示暫時無法比較。</li>
+<li><b>v1.5.2｜2026/11/14：</b>取消統一投信抓取橋接器僅匯入五日的限制，允許保存上游確實提供、且通過檢查的較早快照；不會自行產生不存在的歷史資料。</li>
+<li><b>v1.5.1｜2026/11/14：</b>統一投信來源由 00981A 擴充到 00403A、00988A，並支援海外成分股代號格式。</li>
+<li><b>v1.5.0｜2026/11/13：</b>建立 00981A 自動持股抓取、SQLite 匯入與 GitHub Pages 日期快照發布流程。</li><li><b>v1.4.2｜2026/11/13：</b>新增盤中停損／停利試算：輸入當前價格即可試算，盤中最高／最低可選填；顯示警示線、觸線判斷、未實現損益和資料時間。盤中快照獨立儲存，不影響正式收盤追蹤及總表。</li><li><b>v1.4.1｜2026/11/13：</b>三大法人籌碼新增上市大盤每日法人買進、賣出與買賣超（億元），支援日期選擇、自營商自行買賣／避險拆分；與個股股數資料分開，資料由證交所 BFI82U 公開日報更新。</li><li><b>v1.4｜2026/11/13：</b>新增 ETF 0～40 年 3%／7%／10% 獲利試算、定期定額與年度加碼、配息再投入／領現比較、行情與當沖／法人查詢、主動式 ETF 完整持股清單快照比較。行情不代表即時報價；主動式 ETF 資料需要已驗證的實際完整持股；PCF 申購贖回籃子不一定等於基金完整實際持股。</li><li><b>v1.3｜2026/11/13：</b>新增上市與上櫃三大法人籌碼查詢，提供官方資料排程更新、5／10／20／60 個交易日累積買賣超、排行、股票查詢及本機持股對照。法人資料自動更新不等於股價更新；資料可能延遲，需確認來源日期及完整度。</li><li><b>v1.2｜2026/11/13：</b>持股清單新增每檔未實現損益金額與報酬率；顯示各檔最後價格日期及來源，可單獨更新日期／參考價格；保留上方總損益；加入備份提醒與資料儲存說明。</li><li><b>v1.1：</b>加入國泰證券 2.8 折損益試算，支援帶入持股、手續費及交易稅估算。</li><li><b>v1.0：</b>跨日買賣成本、交易紀錄、每日高低收盤價格追蹤、移動停利停損、JSON/CSV 備份。</li></ul></section>
  <section class="panel docs-card"><h3>📍 資料實際存放在哪裡？</h3><p><b>存在目前使用裝置的瀏覽器 localStorage，而不是 GitHub 雲端資料庫。</b>例如在 Windows 電腦 Chrome 輸入的交易，會留在那台電腦的 Chrome 使用者設定檔中；Edge、其他電腦、手機不會自動看到。</p><p>瀏覽器關閉後通常仍會保留，但刪除網站資料、重設設定檔、無痕模式結束，或裝置故障都可能造成資料遺失。GitHub 專案是公開網頁程式，不應上傳真實交易備份。</p></section>
  <section class="panel docs-card"><h3>💾 換裝置或定期備份</h3><ol class="docs-steps"><li>在原電腦點「資料匯入與備份 → 下載完整備份（JSON）」。</li><li>確認檔案已下載並妥善存放，不要把內含交易明細的 JSON 公開在 GitHub。</li><li>在新電腦或手機開啟同一網站，點「還原 JSON」並選擇備份檔，即可轉移交易與價格資料。</li><li>建議<b>至少每月備份一次</b>，每次大量修改交易後也備份。</li></ol></section>
  <section class="panel docs-card"><h3>🧹 清除與隱私注意事項</h3><p><b>不要在個人電腦定期清除網站資料。</b>清除 localStorage 可能連買賣成本、報價及試算設定一起刪掉；定期備份才是最重要的維護。若使用公用電腦或不再使用本工具，先備份後再清除網站資料。</p><p>「清空所有資料」會移除本網站儲存的交易紀錄與價格資訊，且無法自行復原。網站程式公開不代表本機輸入的個人交易紀錄公開。</p></section>
  <section class="panel docs-card"><h3>📈 價格日期與損益計算</h3><p>「目前持股」會選取截至查詢日、且在目前持股週期內的<b>最後一筆有效價格</b>。如果同一天既有每日行情又有手動參考價，以手動參考價作為估值。個股未實現損益＝價格 × 持有股數 − 持股成本；總表是各檔已有報價的損益加總。</p><p>若未更新價格，畫面不會有即時性；請自行確認每檔股票標示的日期。未實現損益<b>未扣除未來賣出手續費與交易稅</b>。正式歷史停利停損追蹤仍以完整最高／最低／收盤行情為準；另有「盤中試算」可使用目前價格，僅為暫時警示、不會更動正式追蹤線。</p></section>
+ <section class="panel docs-card" style="border:1px solid #c28d43"><h3>⚠️ 資料來源與使用風險（請先閱讀）</h3><p><b>本站為個人研究與資料整理工具，不保證資料正確、完整或即時；請勿完全相信本站的數字直接下單。</b>ETF 持股可能由發行投信公開資訊、第三方平台、開源抓取器及自動解析整合，可能發生延遲、遺漏、網頁改版、重複、單位錯誤、誤判現金／期貨、停牌或成分股異動等狀況。程式格式檢查通過，<b>不等於已經投信官方逐筆核對</b>。</p><p>每次投資決策前，請至少再向<b>發行投信官方公告、臺灣證交所／櫃買中心、券商交易系統</b>等獨立來源交叉驗證日期、完整性、股數／權重、法人買賣超和市場價格。PCF 申購贖回籃子不可直接視為基金全部實際持股；兩日期部位差異也不等於基金經理人實際成交紀錄。尚未完成來源驗證的 ETF 顯示「暫時無法比較」。</p></section>
  <section class="panel docs-card"><h3>ℹ️ 使用限制</h3><p>本工具不提供買賣建議或券商同步。股票分割、現金股利、減資、配股等特殊交易不會自動調整；交易稅、券商手續費及最低收費請以實際成交回報為準。</p><p>主動式 ETF 本機持股快照存放在另一個瀏覽器 localStorage 鍵中，需到「主動式 ETF 持股異動」另外備份；不包含在交易紀錄 JSON 中。</p><p>v1.4 三大法人與盤後行情公開資料由 GitHub Actions 抓取後以 JSON 發布；僅供查詢，不會更動本機持股、價格或停損線。網站版本更新不等於個股報價自動更新。升級網頁前，建議先下載完整 JSON 備份，並保持原網站網址與同一瀏覽器設定檔，以便沿用既有資料。</p></section>
  </div>`;
  return s;
