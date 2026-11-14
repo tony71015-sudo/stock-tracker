@@ -10,6 +10,8 @@ on:
       - 'etf_simulator.js'
       - 'market.js'
       - 'active_etf.js'
+      - 'index_etf.js'
+      - 'index_etf_returns.js'
       - 'tools.css'
       - 'scripts/**'
       - 'data/active-etf/sources.json'
@@ -70,7 +72,9 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- data/institutional data/market data/active-etf
+          # Active ETF snapshots are published by their dedicated workflow.
+          # Avoid rewriting their shared status.json from this workflow.
+          git add -A -- data/institutional data/market
           if git diff --cached --quiet; then
             echo "Public data unchanged"
           else
@@ -96,7 +100,16 @@ jobs:
       - name: Stage public website assets
         run: |
           mkdir -p _site/data
-         cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js index_etf_returns.js index_etf_returns.js tools.css _site/ _site/
+          # Preserve core assets; optionally stage newer frontend modules.
+          for file in index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js index_etf_returns.js tools.css; do
+            if [ -f "$file" ]; then
+              cp "$file" _site/
+            elif [ "$file" = index_etf_returns.js ]; then
+              echo '::warning::Missing index_etf_returns.js in repository main; index ETF return simulator cannot load.'
+            else
+              echo "::warning::Missing optional or legacy website asset: $file"
+            fi
+          done
           # Optional datasets do not exist before the first successful fetch.
           for dataset in institutional market active-etf index-etf; do
             if [ -d "data/$dataset" ]; then
