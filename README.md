@@ -1,24 +1,28 @@
-# Trade Compass v1.4.2 大盤三大法人歷史日期查詢修正
+# Trade Compass | 主動式 ETF 後台缺檔狀態標示
 
-這是「安全補丁」，只需更新兩個檔案，不須重新上傳 index.html 或個人交易資料。
+## 功能
 
-## 問題原因（2026-11-14）
-- 線上 `data/institutional/market-flow.json` 只有 `2026-11-13` 一筆資料；上面的「60 交易日」是另一個個股法人累積功能。
-- BFI82U 歷史查詢需使用 `dayDate=YYYYMMDD&type=day`，原腳本錯用 `date=YYYYMMDD`，證交所一直回最新日，造成舊日回報 date mismatch。
-- 線上 `.github/workflows/update-institutions.yml` 沒有呼叫 `scripts/update_market_flows.py` 的步驟，因此即使其他法人資料更新，這張大盤歷史表也不會跟著補齊。
+本補丁不修改 ETF 持股資料或其他比較公式。它會根據 GitHub Pages 公開的 `data/active-etf/status.json` 和各個 `data/active-etf/indexes/<ETF>.json`，在「主動式 ETF 每日持股歷史比較」下方新增一個狀態區塊：
 
-## 更新方式
-1. **先下載網站內的 JSON 備份**，保護個人持股紀錄。
-2. 解壓縮本補丁，注意 `.github` 是隱藏資料夾（Windows 檔案總管可能需顯示隱藏項目）。
-3. 到原 GitHub 專案，逐一覆蓋：
-   - `scripts/update_market_flows.py`
-   - `.github/workflows/update-institutions.yml`
-4. GitHub Commit changes（提交到 main）。
-5. 到 **Actions → 更新三大法人、股票行情並發布網站 → Run workflow → mode: bootstrap → Run workflow**。
-6. 到本次執行記錄，確認出現 `Fetch official TWSE whole-market institutional money flows (BFI82U)`；觀察 log 中 `Saved N validated dates`，N 大於 1 才代表真正有歷史日期。
-7. 確認 `Deploy GitHub Pages` 綠勾，再重新整理網站「三大法人籌碼」分頁的大盤日期下拉。
+- 可比較：找到兩個以上歷史日期索引（仍需實際驗證兩日持股 JSON）
+- 只有單日資料：目前不可比較
+- 尚無歷史持股檔：找不到或日期索引空白
+- 來源未通過驗證：後台狀態為 `not_verified` 或含 PCF、完整性不合格原因
+- 讀取失敗：網頁無法取得資料索引
 
-## 驗證資料（重點）
-在 GitHub 上點開 `data/institutional/market-flow.json`，確認 `records` 包含多個不同的 date。若仍只有一天，請貼 Actions 中 `Fetch official TWSE whole-market institutional money flows (BFI82U)` 步驟最後 20 行；可能是官方回應格式、存取限制或交易日可用性問題。
+可依狀態篩選與手動重新檢查；顯示最後可用日期及來源錯誤原因，不把缺檔當清倉。
 
-提醒：單次 bootstrap 可能花費數分鐘，依網路及證交所回應而異，不能保證能取到全部 90 天。程式只保存核對日期正確且金額加總一致的紀錄。沒有資料時不會顯示假數字。
+## 安裝（不覆蓋目前已修復的 active_etf.js）
+
+1. 將 `scripts/active_etf_availability_embed.js` 上傳到 GitHub 同路徑。
+2. 將 `.github/workflows/install-active-etf-availability.yml` 上傳到 GitHub 同路徑，提交到 main。
+3. 開 GitHub Actions，執行「安裝主動式 ETF 資料缺漏標示」，選 main，按 Run workflow。
+4. 安裝器會讀取最新 main，把獨立模組追加到既有 `active_etf.js`。沒有覆蓋前台已完成修改。再次執行不會重複新增。
+5. **重要：** 若目前網站採用 Actions 將 `active_etf.js` 複製進 `_site` 再發布，請另外觸發「更新其他台股主動式ETF持股並發布網站」等既有部署工作流程一次，將更新的 JS 發布到 GitHub Pages。
+6. 網站按 Ctrl+F5，切到「主動式 ETF 持股異動」查看新增表格。
+
+## 限制
+
+此功能使用既有後台資料，不會虛構缺失的持股。倘若狀態檔已過期，顯示的原因也可能落後。已有兩日「索引」不保證完整持股已通過人工逐筆核對；PCF 資料不能直接視為實際持股。
+
+注意：請保留 GitHub 既有資料與工作流程。首次執行成功不等於網站已更新，仍需部署。
