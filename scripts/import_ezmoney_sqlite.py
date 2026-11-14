@@ -59,7 +59,10 @@ def snap_from_rows(code,date,rows,now=None):
     if not DATE_RE.fullmatch(date):raise BridgeError('Invalid date')
     day=dt.date.fromisoformat(date)
     if day>now:raise BridgeError('Future date')
-    if (now-day).days>30:raise BridgeError('Stale observation (>30 days), refusing to publish as new')
+    # Historical issuer observations are valid for backfill when their date and
+    # full portfolio pass validation; age alone is not proof of invalidity.
+    # Never mark a historical observation as today's disclosure.
+    if (now-day).days>730:raise BridgeError('Historical observation older than 730 days; manual review required')
     holdings=[];codes=set();total_weight=0
     for row in rows:
         symbol=str(row['stock_code']).strip().upper()
@@ -87,7 +90,9 @@ def snap_from_rows(code,date,rows,now=None):
         'equityWeightTotal':round(total_weight,4),
     }
 
-def ingest(db_path:Path, codes=('00981A',)):
+def ingest(db_path:Path, codes=('00981A',), max_history_days=240):
+    if not 1 <= max_history_days <= 500:
+        raise BridgeError('max_history_days must be between 1 and 500')
     catalog={x['code']:x for x in read(CATALOG,{}).get('funds',[])}
     previous=read(LATEST,{'schema':1,'snapshots':{}})
     status=read(STATUS,{'schema':1,'etfs':{}})
@@ -109,8 +114,9 @@ def ingest(db_path:Path, codes=('00981A',)):
                 continue
             eligible=sorted(by_day,reverse=True)
             saved=[];rejected=[]
-            # Import at most the five latest valid observations, to avoid importing a large unverifiable history.
-            for day in eligible[:5]:
+            # Import all available verified dates up to a configurable retention cap.
+            # Each trading day is validated separately; missing days are never treated as liquidation.
+            for day in eligible[:max_history_days]:
                 try:
                     snapshot=snap_from_rows(code,day,by_day[day]);
                     archive_entry(code,snapshot);saved.append(snapshot)
@@ -123,7 +129,8 @@ def ingest(db_path:Path, codes=('00981A',)):
             previous['snapshots'][code]=hist[:2]
             dates=read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])
             status['etfs'][code]={
-                'name':(catalog.get(code) or {}).get('name') or FUND_NAMES[code],'status':'ok',
+                'name':(catalog.get(code) or {}).get('name') or FUND_NAMES[code],
+                'status':'ok' if (dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()-dt.date.fromisoformat(current['date'])).days<=7 else 'stale',
                 'detail':'開源抓取器轉取統一官網持股；請與原始官方完整投資組合覆核，非即時資料',
                 'date':current['date'],'historicalDates':len(dates),
                 'holdings':len(current['holdings']),'source':SOURCE_URL,
@@ -144,9 +151,10 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument('--sqlite',required=True,type=Path)
     p.add_argument('--code',action='append',default=[],help='Repeatable: 00981A, 00403A, 00988A')
+    p.add_argument('--max-history-days',type=int,default=240,help='Maximum number of historical issuer dates to import per ETF (1-500; default 240)')
     args=p.parse_args()
     if not args.sqlite.is_file():raise SystemExit('Missing crawler SQLite file '+str(args.sqlite))
-    try:res=ingest(args.sqlite,tuple(args.code or ['00981A']))
+    try:res=ingest(args.sqlite,tuple(args.code or ['00981A']),max_history_days=args.max_history_days)
     except (sqlite3.Error,BridgeError) as e:print('IMPORT ERROR:',e,file=sys.stderr);return 2
     print(json.dumps(res,ensure_ascii=False,indent=2))
     return 0 if any(x['status']=='saved' for x in res.values()) else 3
