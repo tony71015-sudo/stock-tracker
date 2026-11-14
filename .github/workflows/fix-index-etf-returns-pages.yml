@@ -1,0 +1,81 @@
+name: 修正指數型ETF報酬試算檔案發布
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-pages-staging:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: true
+
+      - name: Patch Pages staging in existing publishing workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          target = Path('index_etf_returns.js')
+          if not target.is_file():
+              sys.exit('ERROR: index_etf_returns.js does not exist at the repository root. Upload it first.')
+
+          root = Path('.github/workflows')
+          edited = []
+          already = []
+          candidates = []
+          for path in sorted(list(root.glob('*.yml')) + list(root.glob('*.yaml'))):
+              raw = path.read_text(encoding='utf-8')
+              lines = raw.splitlines(keepends=True)
+              modified = False
+              found = False
+              for i, line in enumerate(lines):
+                  stripped = line.lstrip()
+                  # Only alter the existing deployment asset-copy command;
+                  # never modify HTML, JSON datasets, or non-deployment steps.
+                  if not stripped.startswith('cp ') or 'index_etf.js' not in line or '_site/' not in line:
+                      continue
+                  found = True
+                  if 'index_etf_returns.js' in line:
+                      continue
+                  lines[i] = line.replace('index_etf.js', 'index_etf.js index_etf_returns.js', 1)
+                  modified = True
+              if found:
+                  candidates.append(str(path))
+                  if modified:
+                      path.write_text(''.join(lines), encoding='utf-8')
+                      edited.append(str(path))
+                  else:
+                      already.append(str(path))
+
+          print('MATCHED_PUBLISHERS:', *candidates, sep='\n - ')
+          print('UPDATED:', *edited, sep='\n - ')
+          print('ALREADY_PATCHED:', *already, sep='\n - ')
+          if not candidates:
+              sys.exit('ERROR: No existing Pages staging cp command found. Inspect the deployment workflow manually.')
+          PY
+          git diff --check
+          git diff -- .github/workflows
+
+      - name: Commit only workflow changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -u -- .github/workflows
+          if git diff --cached --quiet; then
+            echo 'No changes: publishing workflows already include index_etf_returns.js.'
+            exit 0
+          fi
+          git commit -m 'fix: publish index ETF returns module with Pages site'
+          git push origin HEAD:main
+          echo 'Fix committed. NEXT: manually run your usual Publish GitHub Pages workflow.'
