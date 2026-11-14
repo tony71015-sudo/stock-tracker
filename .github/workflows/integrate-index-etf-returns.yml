@@ -1,0 +1,33 @@
+name: 手動整合指數型 ETF 報酬試算介面
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Integrate without overwriting website
+        run: python scripts/install_index_etf_returns.py
+      - name: Commit only interface integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html index_etf.js
+          if git diff --cached --quiet; then echo 'Already integrated'; exit 0; fi
+          git commit -m 'ui: integrate index ETF return simulator'
+          git fetch origin main
+          if ! git rebase origin/main; then
+            git rebase --abort || true
+            echo 'Website changed during integration; do not force-push.'
+            exit 1
+          fi
+          git push origin HEAD:main

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       rebuild:
-        description: '回補自 2024 年起歷史行情（009816 自上市月）'
+        description: '從各 ETF 實際上市月份重新回補完整歷史股價（首次建議選 true）'
         required: false
         type: boolean
         default: false
@@ -14,7 +14,7 @@ permissions:
 jobs:
   update-prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
@@ -27,17 +27,19 @@ jobs:
           if [ '${{ inputs.rebuild }}' = 'true' ]; then
             python scripts/update_index_etf_prices.py --rebuild
           else
-            python scripts/update_index_etf_prices.py
+            python scripts/update_index_etf_prices.py --backfill --max-months 30
           fi
-      - name: Publish prices without forced push
+      - name: Fetch official ETF cash distribution history
+        run: python scripts/update_index_etf_dividends.py
+      - name: Publish price and dividend archives without forced push
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/index-etf/prices
+          git add data/index-etf/prices data/index-etf/dividends
           if git diff --cached --quiet; then echo 'No changes'; exit 0; fi
-          git commit -m 'data: update official index ETF closing prices'
+          git commit -m 'data: update official index ETF closes and distributions'
           for i in 1 2 3 4 5; do
             git fetch origin main
             if ! git rebase origin/main; then
