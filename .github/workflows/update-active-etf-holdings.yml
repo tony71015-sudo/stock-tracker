@@ -1,4 +1,4 @@
-name: 更新統一投信 00981A 每日完整持股並發布網站
+name: 更新統一投信主動 ETF 每日完整持股並發布網站（00981A、00403A、00988A）
 
 on:
   schedule:
@@ -41,9 +41,9 @@ jobs:
         run: |
           cd /tmp/tw-active-etf-crawler
           timeout 600 python main.py --ezmoney
-      - name: Validate and import latest 00981A issuer holdings
+      - name: Validate and import EZMoney 00981A, 00403A, 00988A holdings
         run: |
-          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A
+          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A --code 00403A --code 00988A
       - name: Commit validated public snapshots only
         shell: bash
         run: |
@@ -54,7 +54,7 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No new portfolio snapshots.'
           else
-            git commit -m 'data: archive EZMoney 00981A issuer portfolio snapshot'
+            git commit -m 'data: archive EZMoney active ETF issuer portfolios'
             for attempt in 1 2 3; do
               git fetch origin main
               git rebase origin/main
