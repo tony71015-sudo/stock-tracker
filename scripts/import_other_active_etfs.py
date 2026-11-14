@@ -25,6 +25,9 @@ PCF_ONLY = {'00401A', '00996A', '00407A', '00410A'}
 SUPPORTED = {'00980A': {'issuer': '野村', 'domain': 'nomurafunds.com.tw'}, '00985A': {'issuer': '野村', 'domain': 'nomurafunds.com.tw'}, '00999A': {'issuer': '野村', 'domain': 'nomurafunds.com.tw'}, '00982A': {'issuer': '群益', 'domain': 'capitalfund.com.tw'}, '00992A': {'issuer': '群益', 'domain': 'capitalfund.com.tw'}, '00991A': {'issuer': '復華', 'domain': 'fhtrust.com.tw'}, '00995A': {'issuer': '中信', 'domain': 'ctbcinvestments.com'}, '00406A': {'issuer': '中信', 'domain': 'ctbcinvestments.com'}, '00994A': {'issuer': '第一金', 'domain': 'fsitc.com.tw'}, '00408A': {'issuer': '第一金', 'domain': 'fsitc.com.tw'}, '00987A': {'issuer': '台新', 'domain': 'tsit.com.tw'}, '00984A': {'issuer': '安聯', 'domain': 'allianzgi.com.tw'}, '00993A': {'issuer': '安聯', 'domain': 'allianzgi.com.tw'}, '00400A': {'issuer': '國泰', 'domain': 'cathaysite.com.tw'}, '00401A': {'issuer': '摩根', 'domain': 'am.jpmorgan.com'}, '00405A': {'issuer': '富邦', 'domain': 'fubon.com'}, '00404A': {'issuer': '聯博', 'domain': 'alliancebernstein.com'}, '00996A': {'issuer': '兆豐', 'domain': 'megafunds.com.tw'}, '00407A': {'issuer': '凱基', 'domain': 'kgifund.com.tw'}, '00410A': {'issuer': '永豐', 'domain': 'sitc.sinopac.com'}}
 
 
+# Known display names only; verified source eligibility is controlled by SUPPORTED, not catalog.
+FUND_NAMES = {'00400A': '主動國泰動能高息', '00401A': '主動摩根台灣鑫收', '00404A': '主動聯博動能50', '00405A': '主動富邦台灣龍耀', '00406A': '主動中信台灣收益', '00407A': '主動凱基台灣', '00408A': '主動第一金優股息', '00410A': '主動永豐科技趨勢', '00980A': '主動野村臺灣優選', '00982A': '主動群益台灣強棒', '00984A': '主動安聯台灣高息', '00985A': '主動野村台灣50', '00987A': '主動台新優勢成長', '00991A': '主動復華未來50', '00992A': '主動群益科技創新', '00993A': '主動安聯台灣', '00994A': '主動第一金台股優', '00995A': '主動中信台灣卓越', '00996A': '主動兆豐台灣豐收', '00999A': '主動野村臺灣高息'}
+
 def convert_day(code, date, rows, now=None):
     """Validate dated equity holdings without the old 30-day ingestion cap.
 
@@ -82,7 +85,23 @@ def convert_day(code, date, rows, now=None):
 def ingest(db_path:Path, today=None, max_history_days=240):
     today=today or dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
     if not 1<=max_history_days<=500:raise BridgeError('max_history_days outside 1..500')
-    catalog={row['code']:row for row in read(CATALOG,{}).get('funds',[])}
+    # A partial or older website catalog must not disable explicitly supported sources.
+    catalog_doc=read(CATALOG, {'schema':1,'funds':[]})
+    if not isinstance(catalog_doc,dict) or not isinstance(catalog_doc.get('funds'),list):
+        raise BridgeError('Invalid ETF catalog format')
+    catalog={str(row.get('code','')).strip().upper():row for row in catalog_doc['funds']
+             if isinstance(row,dict) and row.get('code')}
+    added=[]
+    for code,meta in SUPPORTED.items():
+        if code not in catalog:
+            item={'code':code,'name':FUND_NAMES.get(code,code),'category':'股票'}
+            catalog[code]=item
+            catalog_doc['funds'].append(item)
+            added.append(code)
+    if added:
+        # Preserve existing catalog entries, metadata and unrelated ETF records.
+        write(CATALOG,catalog_doc)
+        print('CATALOG_RECOVERED',len(added),'codes:',','.join(added))
     latest=read(LATEST,{'schema':1,'snapshots':{}})
     status=read(STATUS,{'schema':1,'etfs':{}})
     if not isinstance(latest.get('snapshots'),dict):raise BridgeError('Invalid latest.json')
@@ -90,9 +109,6 @@ def ingest(db_path:Path, today=None, max_history_days=240):
     report={};saved_count=0
     with connection(db_path) as db:
         for code,meta in SUPPORTED.items():
-            if code not in catalog:
-                report[code]={'status':'unlisted','reason':'Not in current Trade Compass catalog'}
-                continue
             try:
                 rows=select_rows(db,code)
             except BridgeError as exc:
