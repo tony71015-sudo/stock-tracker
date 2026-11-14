@@ -36,18 +36,56 @@ jobs:
         run: |
           python -m pip install -r /tmp/tw-active-etf-crawler/requirements.txt
           python -m playwright install chromium
-      - name: Collect other supported Taiwan equity active ETFs
+      # Isolate each issuer so a slow/broken site cannot starve all later issuers.
+      # --all previously timed out after 1950s with no issuer-by-issuer diagnosis.
+      - name: Collect each supported issuer independently
         shell: bash
         run: |
-          set +e
+          set -uo pipefail
           cd /tmp/tw-active-etf-crawler
-          timeout 1950 python main.py --all
-          rc=$?
-          echo "Crawler exit code: $rc; import any previously collected valid records when SQLite exists."
-          if [ ! -f data/etf_holdings.db ]; then
-            echo '::warning::No collector SQLite; no new snapshots.'
+          mkdir -p data
+          : > issuer_results.txt
+          # The crawler's documented CLI flags; exclude EZMoney (separate job).
+          issuers=(nomura capital fhtrust ctbc fsitc tsit allianz cathay morgan fubon abfunds megafunds kgi sinopac)
+          for issuer in "${issuers[@]}"; do
+            echo "::group::issuer $issuer"
+            echo "START $issuer $(date -u +%FT%TZ)" | tee -a issuer_results.txt
+            timeout --signal=TERM --kill-after=10s 130s python main.py "--$issuer" > "issuer_${issuer}.log" 2>&1
+            rc=$?
+            tail -n 12 "issuer_${issuer}.log" || true
+            echo "RESULT $issuer rc=$rc $(date -u +%FT%TZ)" | tee -a issuer_results.txt
+            echo "::endgroup::"
+          done
+          if [ -f data/etf_holdings.db ]; then
+            python - <<'PY_DIAG'
+          import sqlite3
+          from pathlib import Path
+          db=Path('data/etf_holdings.db')
+          con=sqlite3.connect(str(db))
+          try:
+              rows=con.execute('SELECT etf_code, COUNT(*), COUNT(DISTINCT date) FROM holdings GROUP BY etf_code ORDER BY etf_code').fetchall()
+              for code,count,dates in rows:
+                  print(f'SQLITE_ETF {code} rows={count} dates={dates}')
+          except sqlite3.Error as e:
+              print('::warning::Unable to summarize SQLite holdings:',e)
+          finally:
+              con.close()
+          PY_DIAG
+          else
+            echo '::warning::No SQLite file was created by issuer crawlers'
           fi
-          exit 0
+          # Individual source failures are reported and are not silently treated
+          # as usable complete portfolios.
+      - name: Publish per-issuer crawl logs for diagnosis
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: active-etf-crawler-diagnostics
+          path: |
+            /tmp/tw-active-etf-crawler/issuer_results.txt
+            /tmp/tw-active-etf-crawler/issuer_*.log
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Validate and archive available issuer-reported holdings
         run: |
           if [ -f /tmp/tw-active-etf-crawler/data/etf_holdings.db ]; then
