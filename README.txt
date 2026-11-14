@@ -1,7 +1,7 @@
-Trade Compass v1.5.0 00981A 匯入修補
+Trade Compass v1.5.7 — fix other active ETF importer skipping all as unlisted.
 
-原因：import_ezmoney_sqlite.py 將網站 ETF 目錄 catalog.json 當成必要白名單，若未讀到 00981A 就誤報 Unsupported code。
+Replace only scripts/import_other_active_etfs.py in your GitHub repository, commit to main, then manually run update-other-active-etfs.yml. No workflow or HTML replacement necessary.
 
-安裝：GitHub 原專案打開 scripts/import_ezmoney_sqlite.py，使用本 ZIP 中同路徑檔案覆蓋，Commit changes，回 Actions 的 00981A 更新流程重新執行。
+The importer will add missing supported ETF entries to data/active-etf/catalog.json, retaining the existing catalog, and import only eligible snapshots. PCF-only funds remain excluded; structural checks do not independently verify actual fund holdings.
 
-注意：此補丁修正代號驗證，不等於已確認 SQLite 資料表符合預期，也不保證抓到兩天持股。下次若仍失敗，請貼 Validate and import 步驟錯誤紀錄。
+Verify Actions log: CATALOG_RECOVERED, ETF_RESULT status saved/retained/unavailable rather than unlisted. GitHub Actions success does not guarantee verified holdings.
