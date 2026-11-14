@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Official-source active-ETF actual-portfolio collector, v1.4.7.
+"""Official-source active-ETF actual-portfolio collector, v1.4.9.
 
 For every catalog fund: publish explicit connection status. For issuer sources
 verified as *actual complete holdings*, archive dated snapshots and preserve
@@ -194,15 +194,32 @@ def get_source(source,etf):
 
 
 def archive_entry(code,snapshot):
+    """Publish an incremental date index and one immutable date file per snapshot.
+
+    Retain a short legacy history window for previous UI versions; never rewrite
+    all 240 full snapshots in latest/history JSON on every trading day.
+    """
     file=HISTORY/(code+'.json')
     old=read(file,{'schema':1,'etf':code,'snapshots':[]})
     if old.get('schema')!=1 or old.get('etf')!=code or not isinstance(old.get('snapshots'),list):
         raise SourceError('Previous history format invalid')
     by_date={s['date']:s for s in old['snapshots'] if s.get('complete') and isinstance(s.get('holdings'),list)}
     by_date[snapshot['date']]=snapshot
-    records=sorted(by_date.values(),key=lambda s:s['date'],reverse=True)[:MAX_HISTORY]
-    write(file,{'schema':1,'etf':code,'snapshots':records})
-    return records
+    records=sorted(by_date.values(),key=lambda s:s['date'],reverse=True)
+    day_dir=BASE/'daily'/code
+    # On first upgrade, migrate existing verified historical snapshots into
+    # independent date files before slimming the legacy aggregate.
+    for item in records:
+        write(day_dir/(item['date']+'.json'),{'schema':1,'etf':code,'snapshot':item})
+    # Preserve previously indexed dates even after legacy window is trimmed.
+    prior=read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])
+    dates=sorted(set(d for d in prior if isinstance(d,str) and DAY.fullmatch(d))|
+                 {s['date'] for s in records},reverse=True)
+    write(BASE/'indexes'/(code+'.json'),{
+        'schema':1,'etf':code,'dates':dates,
+        'updatedAt':dt.datetime.now(dt.timezone.utc).isoformat()})
+    write(file,{'schema':1,'etf':code,'snapshots':records[:15]})
+    return records[:15]
 
 
 def run():
@@ -228,8 +245,8 @@ def run():
             validate_source(source,code)
             snapshot=get_source(source,code)
             saved=archive_entry(code,snapshot)
-            previous['snapshots'][code]=saved[:30]
-            summary[code]={**base,'status':'ok','date':saved[0]['date'],'historicalDates':len(saved),'holdings':len(snapshot['holdings']),
+            previous['snapshots'][code]=saved[:2]
+            summary[code]={**base,'status':'ok','date':saved[0]['date'],'historicalDates':len(read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])),'holdings':len(snapshot['holdings']),
                            'source':source['url']}
             updated+=1
             print('OK',code,snapshot['date'],len(snapshot['holdings']))
