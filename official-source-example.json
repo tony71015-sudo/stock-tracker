@@ -1,0 +1,22 @@
+{
+  "sources": [
+    {
+      "etf": "00981A",
+      "url": "https://YOUR-VERIFIED-ISSUER-HOST.example.com.tw/path/to/full-actual-portfolio.csv",
+      "issuer_domain": "YOUR-VERIFIED-ISSUER-HOST.example.com.tw",
+      "portfolio_kind": "actual_holdings",
+      "verified_actual_holdings": false,
+      "format": "csv",
+      "minimum_holdings": 5,
+      "columns": {
+        "date": "日期",
+        "code": "股票代號",
+        "name": "股票名稱",
+        "shares": "股數",
+        "weight": "權重"
+      }
+    }
+  ],
+  "delay_seconds": 0.5,
+  "note": "This is a CONFIGURATION EXAMPLE, NOT a working issuer URL. Only set verified_actual_holdings=true after verifying the real issuer's complete actual portfolio and license. Do not paste this example over sources.json and expect it to work."
+}
