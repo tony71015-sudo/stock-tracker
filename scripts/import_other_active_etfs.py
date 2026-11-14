@@ -48,10 +48,40 @@ def convert_day(code, date, rows, now=None):
     seen=set()
     weight_total=0.0
     symbol_re=re.compile(r'\d{4,6}[A-Z]?')
+    asset_positions=[]
     for item in rows:
         symbol=str(item['stock_code'] or '').strip().upper()
+        name=str(item['stock_name'] or symbol).strip()
         if not symbol_re.fullmatch(symbol):
-            raise BridgeError('Unrecognized TW-equity symbol: '+repr(symbol))
+            # The upstream SQLite `shares` column is not always a monetary
+            # amount or contract count for cash/futures. Preserve its raw
+            # numeric value, but never guess that the unit is TWD or lots.
+            text=(symbol+' '+name).lower()
+            if any(x in text for x in ('現金', '存款', 'cash', 'c_ntd', 'deposit', '活存', '定存')):
+                kind='cash'
+            elif any(x in text for x in ('期貨','期指','futures','future','台指','小台','微台','保證金')):
+                kind='futures' if '保證金' not in text else 'margin'
+            elif any(x in text for x in ('應收','應付','receivable','payable')):
+                kind='receivable_payable'
+            else:
+                raise BridgeError('Unrecognized TW-equity symbol: '+repr(symbol))
+            try:
+                raw_amount=float(item['shares']) if item['shares'] is not None else None
+                raw_weight=float(item['weight']) if item['weight'] is not None else None
+            except (TypeError,ValueError):
+                raise BridgeError('Invalid non-equity asset number: '+repr(symbol))
+            if raw_amount is not None and not math.isfinite(raw_amount):
+                raise BridgeError('Nonfinite asset quantity')
+            if raw_weight is not None and (not math.isfinite(raw_weight) or abs(raw_weight)>200):
+                raise BridgeError('Invalid non-equity asset weight')
+            # Two-sided comparisons of *weights* are safe; units for absolute
+            # amounts stay unverified unless the issuer explicitly labels them.
+            explicit_unit='TWD' if any(x in text for x in ('新臺幣','新台幣','twd',' 元','nt$')) else ('contracts' if '口' in text and kind=='futures' else None)
+            asset_positions.append({'id':symbol or name,'name':name,'type':kind,
+                'reportedValue':raw_amount,'unit':explicit_unit or 'upstream_unverified',
+                'unitVerified':bool(explicit_unit),
+                'weight':round(raw_weight,5) if raw_weight is not None else None})
+            continue
         if symbol in seen:
             raise BridgeError('Duplicate constituent: '+symbol)
         seen.add(symbol)
@@ -79,6 +109,8 @@ def convert_day(code, date, rows, now=None):
         'provenance':'upstream_issuer_scraper; independent_official_reconciliation_pending',
         'dataVerification':'structural_validation_only',
         'holdings':holdings,'equityWeightTotal':round(weight_total,4),
+        'assetPositions':asset_positions,
+        'assetPositionNote':'非股票類別來源數值的幣別或口數若未註明，不做金額/口數推定；可比較同一類別權重百分點。',
     }
 
 
@@ -138,6 +170,7 @@ def ingest(db_path:Path, today=None, max_history_days=240):
                     'name':catalog[code].get('name',code),'status':state,
                     'date':newest['date'],'historicalDates':len(index),
                     'holdings':len(newest.get('holdings',[])), 'source':UPSTREAM,
+                    'assetPositions':len(newest.get('assetPositions',[])),
                     'issuer':meta['issuer'],
                     'detail':('已保存 '+str(len(index))+' 個日期；'+
                               ('可選兩個有效日期比較' if len(index)>=2 else '只有一個日期，暫時無法比較')+
