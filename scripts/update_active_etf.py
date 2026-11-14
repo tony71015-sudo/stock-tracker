@@ -239,7 +239,15 @@ def run():
         base={'name':item.get('name',code),'historicalDates':len(history),
               'date':history[0]['date'] if history else None}
         if not source:
-            summary[code]={**base,'status':'not_configured','detail':'尚未核實完整官方投資組合來源'}
+            # A separate opt-in issuer crawler may already have archived a valid
+            # date. Do not hide those public snapshots as 'not configured'.
+            index_dates=read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])
+            published=read(STATUS,{'etfs':{}}).get('etfs',{}).get(code,{})
+            if index_dates and published.get('status')=='ok' and published.get('source'):
+                summary[code]={**base,**published,'date':index_dates[0],
+                               'historicalDates':len(index_dates)}
+            else:
+                summary[code]={**base,'status':'not_configured','detail':'尚未核實完整官方投資組合來源'}
             continue
         try:
             validate_source(source,code)
