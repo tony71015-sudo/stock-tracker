@@ -29,3 +29,13 @@
 .tc-highlight{background:#ebf8f6}
 @media(max-width:1040px){.tc-statgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.tc-results{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.tc-pad{padding:17px 14px}.tc-statgrid,.tc-results{grid-template-columns:1fr}.tc-row-input{min-width:110px}.tc-extra label{width:100%}.tc-extra input[type=number]{width:100%}}
+
+/* v1.4.4 multi-ETF selector and individual stock lookup */
+.tc-active-select{min-width:300px;max-width:100%;flex:1}
+.tc-active-price-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:16px}
+.tc-active-price-grid>div{border:1px solid #e4edf3;background:#f9fbfc;padding:12px;border-radius:10px}
+.tc-active-price-grid small{font-size:11px;color:#70899b;display:block;margin-bottom:6px}
+.tc-active-price-grid b{font-size:16px;color:#203c50}
+.tc-code-btn{border:0;background:transparent;color:#0c8e83;text-decoration:underline;font-weight:800;cursor:pointer;padding:3px 0}
+.tc-code-btn:hover{color:#086e66}
+@media(max-width:800px){.tc-active-price-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tc-active-select{min-width:100%}}

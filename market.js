@@ -18,7 +18,7 @@ async function load(force=false){if(!force&&state.status!=='idle')return;
  catch(e){state.status='error';state.error=String(e.message||e);}
  refresh();}
 function listings(){return state.market?.items||[];}
-function find(code){const exact=listings().filter(x=>x.code===String(code||'').trim().toUpperCase());return exact[0]||null;}
+function find(code){const exact=listings().filter(x=>x.code===String(code||'').trim().toUpperCase());return exact.sort((a,b)=>String(b.date).localeCompare(String(a.date)))[0]||null;}
 function instItem(row){if(!row||!state.inst?.marketData)return null;
  const market=state.inst.marketData[row.market];if(!market)return null;
  const found=market.entries?.find(x=>x[0]===row.code);if(!found)return null;
@@ -34,7 +34,7 @@ function quoteOverview(q){const it=instItem(q),rate=q?.volumeShares&&q.daytradeS
 function html(){if(state.status==='idle')queueMicrotask(()=>load());
  const q=find(state.code);let content=`<div class="head"><div><div class="eyebrow">OFFICIAL AFTER-HOURS MARKET</div><h1>股票行情與籌碼查詢</h1><p class="subtitle">上市／上櫃・開高低收・成交量・當沖・三大法人買賣超（非即時報價）</p></div><div class="actions"><button class="btn" data-market-refresh>↻ 讀取已發布資料</button></div></div>`;
  content+=`<div class="notice-banner"><b>行情不等於即時報價。</b> 本頁從 GitHub Pages 公開快照讀取官方盤後資料，可能延遲。上市／上櫃各自保留資料日期；股價不會自動寫入你的個人持股成本或停損線。</div>`;
- content+=`<section class="panel tc-pad"><div class="tc-searchbar"><label for="marketCode">股票代號</label><input class="field" id="marketCode" placeholder="例如 2330、0050、00981A" value="${esc(state.code)}"><button class="btn primary" data-market-find>查詢股票</button><button class="btn" data-market-holdings>我的持股</button></div><div class="tc-flex" style="margin-top:14px">${Object.entries(state.market?.markets||{}).map(([m,x])=>`<span class="tc-badge">${m==='TWSE'?'上市':'上櫃'}：${note(x.date)}｜${fmt(x.count)} 檔</span>`).join('')}<span class="fine">更新：${state.market?.generatedAt?new Date(state.market.generatedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'尚未更新'}</span></div></section>`;
+ content+=`<section class="panel tc-pad"><div class="tc-searchbar"><label for="marketCode">股票代號／名稱</label><input class="field" id="marketCode" placeholder="例如 2330、台積電、0050" value="${esc(state.code)}"><button class="btn primary" data-market-find>查詢股票</button><button class="btn" data-market-holdings>我的持股</button></div><div class="tc-flex" style="margin-top:14px">${Object.entries(state.market?.markets||{}).map(([m,x])=>`<span class="tc-badge">${m==='TWSE'?'上市':'上櫃'}：${note(x.date)}｜${fmt(x.count)} 檔</span>`).join('')}<span class="fine">更新：${state.market?.generatedAt?new Date(state.market.generatedAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'尚未更新'}</span></div></section>`;
  if(state.status==='loading')return content+`<section class="panel tc-pad">讀取公開資料中…</section>`;
  if(state.status==='error')return content+`<section class="panel tc-pad tc-empty">無法讀取行情：${esc(state.error)}。請檢查 Pages 是否完整部署 data/market/latest.json。</section>`;
  if(!listings().length)return content+`<section class="panel tc-pad tc-empty"><b>官方行情尚未初始化。</b> 請在 GitHub Actions 執行「更新三大法人並發布網站」工作流程。本站不會塞入虛構股價。</section>`;
