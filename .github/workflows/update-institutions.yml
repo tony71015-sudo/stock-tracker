@@ -64,22 +64,47 @@ jobs:
       - name: Optional configured official PCF CSV sources
         run: |
           python scripts/update_active_etf.py || echo '::warning::Some ETF PCF source updates failed; old validated public snapshots retained.'
-      - name: Commit public market datasets to repository
+      - name: Commit public market datasets to repository (safe retry)
+        shell: bash
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A -- data/institutional data/market data/active-etf
-          if ! git diff --cached --quiet; then
-            git commit -m "data: refresh public market and ETF datasets"
-            git push
-          else
+          if git diff --cached --quiet; then
             echo "Public data unchanged"
+          else
+            git commit -m "data: refresh public market and ETF datasets"
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              if ! git rebase origin/main; then
+                git rebase --abort || true
+                echo '::error::Data conflict. Please inspect changes; never force push.'
+                exit 1
+              fi
+              if git push origin HEAD:main; then
+                echo 'Public market datasets pushed successfully.'
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo '::error::Could not push after 5 tries.'
+                exit 1
+              fi
+              sleep $((attempt * 2))
+            done
           fi
       - name: Stage public website assets
         run: |
           mkdir -p _site/data
           cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js tools.css _site/
-          cp -R data/institutional data/market data/active-etf data/index-etf _site/data/
+          # Optional datasets do not exist before the first successful fetch.
+          for dataset in institutional market active-etf index-etf; do
+            if [ -d "data/$dataset" ]; then
+              cp -R "data/$dataset" "_site/data/$dataset"
+            else
+              echo "::notice::Skipping unavailable optional dataset: data/$dataset"
+            fi
+          done
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4

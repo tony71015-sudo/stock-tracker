@@ -66,7 +66,14 @@ jobs:
         run: |
           mkdir -p _site/data
           cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js tools.css _site/
-          cp -R data/institutional data/market data/active-etf data/index-etf _site/data/
+          # Optional datasets do not exist before the first successful fetch.
+          for dataset in institutional market active-etf index-etf; do
+            if [ -d "data/$dataset" ]; then
+              cp -R "data/$dataset" "_site/data/$dataset"
+            else
+              echo "::notice::Skipping unavailable optional dataset: data/$dataset"
+            fi
+          done
           touch _site/.nojekyll
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
