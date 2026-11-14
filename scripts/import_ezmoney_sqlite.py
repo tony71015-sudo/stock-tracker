@@ -18,11 +18,12 @@ import sys
 
 from update_active_etf import archive_entry, read, write, BASE, LATEST, STATUS, HISTORY, CATALOG
 
-SYMBOL_RE=re.compile(r'\d{4,6}[A-Z]?')
+SYMBOL_RE=re.compile(r'[A-Z0-9][A-Z0-9.\-]{0,15}(?: [A-Z]{2,5})?')
 DATE_RE=re.compile(r'\d{4}-\d{2}-\d{2}')
 SOURCE_URL='https://www.ezmoney.com.tw/ETF/Transaction/PCF'
 UPSTREAM='https://github.com/SheenArtem/TWActiveETFCrawler'
-PORTFOLIO_CODES={'00981A','00403A'}
+PORTFOLIO_CODES={'00981A','00403A','00988A'}
+FUND_NAMES={'00981A':'主動統一台股增長','00403A':'主動統一升級50','00988A':'主動統一全球創新'}
 
 def normalize_etf_code(value):
     """Normalize GitHub workflow inputs, including HTML-escaped trailing whitespace."""
@@ -62,7 +63,7 @@ def snap_from_rows(code,date,rows,now=None):
     holdings=[];codes=set();total_weight=0
     for row in rows:
         symbol=str(row['stock_code']).strip().upper()
-        if not SYMBOL_RE.fullmatch(symbol):raise BridgeError('Unexpected non-TW security id '+symbol)
+        if not SYMBOL_RE.fullmatch(symbol):raise BridgeError('Unexpected security identifier '+symbol)
         if symbol in codes:raise BridgeError('Duplicate stock id '+symbol)
         codes.add(symbol)
         name=str(row['stock_name'] or symbol).strip()
@@ -81,6 +82,7 @@ def snap_from_rows(code,date,rows,now=None):
         'source':SOURCE_URL,
         'collector':UPSTREAM,
         'provenance':'Open-source collector reports issuer EZMoney disclosure; independently reconcile PCF vs full portfolio',
+        'shareUnit':'shares', 'securityMarkets':'TW_and_overseas' if code=='00988A' else 'TW',
         'holdings':holdings,
         'equityWeightTotal':round(total_weight,4),
     }
@@ -121,7 +123,7 @@ def ingest(db_path:Path, codes=('00981A',)):
             previous['snapshots'][code]=hist[:2]
             dates=read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])
             status['etfs'][code]={
-                'name':(catalog.get(code) or {}).get('name', code),'status':'ok',
+                'name':(catalog.get(code) or {}).get('name') or FUND_NAMES[code],'status':'ok',
                 'detail':'開源抓取器轉取統一官網持股；請與原始官方完整投資組合覆核，非即時資料',
                 'date':current['date'],'historicalDates':len(dates),
                 'holdings':len(current['holdings']),'source':SOURCE_URL,
@@ -141,7 +143,7 @@ def ingest(db_path:Path, codes=('00981A',)):
 def main():
     p=argparse.ArgumentParser()
     p.add_argument('--sqlite',required=True,type=Path)
-    p.add_argument('--code',action='append',default=[],help='ETF code, e.g. 00981A')
+    p.add_argument('--code',action='append',default=[],help='Repeatable: 00981A, 00403A, 00988A')
     args=p.parse_args()
     if not args.sqlite.is_file():raise SystemExit('Missing crawler SQLite file '+str(args.sqlite))
     try:res=ingest(args.sqlite,tuple(args.code or ['00981A']))
