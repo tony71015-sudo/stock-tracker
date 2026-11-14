@@ -1,0 +1,86 @@
+name: 更新其他台股主動式ETF持股並發布網站（來源不足標示無法比較）
+
+on:
+  schedule:
+    # 21:55 Asia/Taipei weekdays. Collector generally offers T+1 for some issuers.
+    - cron: '55 13 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: trade-compass-pages
+  cancel-in-progress: false
+
+jobs:
+  import-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 42
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Obtain maintained issuer-site crawler
+        run: |
+          git clone --depth 1 https://github.com/SheenArtem/TWActiveETFCrawler.git /tmp/tw-active-etf-crawler
+      - name: Install crawler dependencies
+        run: |
+          python -m pip install -r /tmp/tw-active-etf-crawler/requirements.txt
+          python -m playwright install chromium
+      - name: Collect other supported Taiwan equity active ETFs
+        shell: bash
+        run: |
+          set +e
+          cd /tmp/tw-active-etf-crawler
+          timeout 1950 python main.py --all
+          rc=$?
+          echo "Crawler exit code: $rc; import any previously collected valid records when SQLite exists."
+          if [ ! -f data/etf_holdings.db ]; then
+            echo '::warning::No collector SQLite; no new snapshots.'
+          fi
+          exit 0
+      - name: Validate and archive available issuer-reported holdings
+        run: |
+          if [ -f /tmp/tw-active-etf-crawler/data/etf_holdings.db ]; then
+            python scripts/import_other_active_etfs.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db
+          else
+            echo '::warning::No SQLite from crawler; publish existing archive without pretending data was updated.'
+          fi
+      - name: Commit public ETF snapshots only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- data/active-etf
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: archive other active ETF issuer holdings'
+            for attempt in 1 2 3; do
+              git fetch origin main
+              if ! git rebase origin/main; then git rebase --abort; exit 1; fi
+              if git push origin HEAD:main; then break; fi
+              if [ "$attempt" -eq 3 ]; then exit 1; fi
+            done
+          fi
+      - name: Stage public site
+        run: |
+          mkdir -p _site/data
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js tools.css _site/
+          cp -R data/institutional data/market data/active-etf _site/data/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: '_site'
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
