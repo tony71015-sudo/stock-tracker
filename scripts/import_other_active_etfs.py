@@ -53,6 +53,11 @@ def convert_day(code, date, rows, now=None):
         symbol=str(item['stock_code'] or '').strip().upper()
         name=str(item['stock_name'] or symbol).strip()
         if not symbol_re.fullmatch(symbol):
+            # Some issuer tables include a `股票` category/subtotal row, not
+            # an individual security. Never treat it as a holding, and do not
+            # count a category subtotal again when summing stock weights.
+            if symbol in {'股票', '股票合計', '股票小計', '股票部位', '股票投資', '股票類'}:
+                continue
             # The upstream SQLite `shares` column is not always a monetary
             # amount or contract count for cash/futures. Preserve its raw
             # numeric value, but never guess that the unit is TWD or lots.
