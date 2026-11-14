@@ -22,6 +22,7 @@ DATE_RE=re.compile(r'\d{4}-\d{2}-\d{2}')
 SOURCE_URL='https://www.ezmoney.com.tw/ETF/Transaction/PCF'
 UPSTREAM='https://github.com/SheenArtem/TWActiveETFCrawler'
 PORTFOLIO_CODES={'00981A','00403A'}
+FUND_NAMES={'00981A':'主動統一台股增長','00403A':'主動統一升級50'}
 
 class BridgeError(ValueError):pass
 
@@ -87,7 +88,10 @@ def ingest(db_path:Path, codes=('00981A',)):
     result={}; updated=0
     with connection(db_path) as db:
         for code in codes:
-            if code not in PORTFOLIO_CODES or code not in catalog:raise BridgeError('Unsupported code '+code)
+            if code not in PORTFOLIO_CODES:raise BridgeError('Unsupported code '+code)
+            # ETF issuer allowlist is authoritative. The website catalog is optional
+            # display metadata and must not prevent a permitted import.
+            fund_name=(catalog.get(code) or {}).get('name') or FUND_NAMES[code]
             rows=select_rows(db,code)
             by_day={}
             for r in rows:
@@ -112,7 +116,7 @@ def ingest(db_path:Path, codes=('00981A',)):
             previous['snapshots'][code]=hist[:2]
             dates=read(BASE/'indexes'/(code+'.json'),{'dates':[]}).get('dates',[])
             status['etfs'][code]={
-                'name':catalog[code]['name'],'status':'ok',
+                'name':fund_name,'status':'ok',
                 'detail':'開源抓取器轉取統一官網持股；請與原始官方完整投資組合覆核，非即時資料',
                 'date':current['date'],'historicalDates':len(dates),
                 'holdings':len(current['holdings']),'source':SOURCE_URL,
