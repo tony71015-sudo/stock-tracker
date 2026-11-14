@@ -97,6 +97,7 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
 
 </script>
 <script src="active_etf.js" defer></script>
+<script src="index_etf.js" defer></script>
 </head>
 <body>
 <div class="app">
@@ -111,6 +112,7 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
       <button class="nav-btn" data-page="etfSim"><span class="nav-ico">◫</span> ETF 40 年獲利試算</button>
       <button class="nav-btn" data-page="stockSearch"><span class="nav-ico">⌕</span> 股票行情查詢</button>
       <button class="nav-btn" data-page="activeETF"><span class="nav-ico">◈</span> 主動式 ETF 持股異動</button>
+      <button class="nav-btn" data-page="indexETF"><span class="nav-ico">▥</span> 指數型 ETF × 法人</button>
       <button class="nav-btn" data-page="tracking"><span class="nav-ico">⌁</span> 價格追蹤</button>
       <button class="nav-btn" data-page="settings"><span class="nav-ico">⚙</span> 策略設定</button>
       <button class="nav-btn" data-page="data"><span class="nav-ico">⇩</span> 資料匯入與備份</button>
@@ -120,7 +122,7 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
   </aside>
   <div class="mobile-shade" id="shade"></div>
   <div class="main-wrap">
-    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● Trade Compass v1.5.0</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
+    <header class="topbar"><div class="breadcrumb"><button id="openMenu" class="roundbtn menu-btn" aria-label="開啟選單">☰</button><span class="desktop">工作空間</span><span class="pill-sep desktop"></span><strong id="breadcrumbCurrent">總覽儀表板</strong></div><div class="top-actions"><span class="chip desktop">● Trade Compass v1.5.4</span><button class="roundbtn desktop" data-nav="data">備份資料</button><div class="avatar">TW</div></div></header>
     <main class="content" id="main"></main>
   </div>
 </div>
@@ -303,7 +305,7 @@ function save(){try{localStorage.setItem(STORAGE,JSON.stringify(db));persisted=t
 function notify(msg){const el=$('#toast');if(!el)return;el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3400);}
 const nameOf=s=>{const recent=[...db.transactions].reverse().find(t=>t.symbol===s&&t.name);return recent?.name||s;};
 const holdings=()=>C.totals(db.transactions,db.quotes,asOf,db.settings,db.manualPrices);
-function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'股票行情查詢',activeETF:'主動式 ETF 持股異動'})[active];}
+function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'股票行情查詢',activeETF:'主動式 ETF 持股異動',indexETF:'指數型 ETF × 三大法人'})[active];}
 function head(eyebrow,title,sub,buttons='') {return `<div class="head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${sub}</p></div><div class="actions">${buttons}</div></div>`;}
 function pill(status){if(status.includes('觸及'))return `<span class="tag red">● ${E(status)}</span>`;if(status==='移動停利中')return `<span class="tag mint">● 移動停利中</span>`;if(status==='未啟動')return `<span class="tag gold">○ 未啟動</span>`;return `<span class="tag slate">${E(status||'—')}</span>`;}
 function empty(title,desc,action=''){return `<div class="empty-hero"><div class="empty-icon">⌁</div><h3>${title}</h3><p>${desc}</p>${action}</div>`;}
@@ -463,7 +465,7 @@ function aboutPage(){
  return s;
 }
 
-function render(){const idmap={overview:'overview',transactions:'transactions',tracking:'tracking',settings:'settings',data:'data',cathay:'cathay',about:'about',institutions:'institutions',etfSim:'etfSim',stockSearch:'stockSearch',activeETF:'activeETF'};document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===active);b.setAttribute('aria-current',b.dataset.page===active?'page':'false');});$('#breadcrumbCurrent').textContent=navTitle();const main=$('#main');main.innerHTML=({overview,transactions,tracking,settings,data:dataPage,cathay:cathayPage,about:aboutPage,institutions:()=>window.TradeCompassInstitutional?.html()||'<div class="inst-loading">載入法人查詢模組中…</div>',etfSim:()=>window.TradeCompassETF?.html()||'ETF 試算模組載入中…',stockSearch:()=>window.TradeCompassMarket?.html()||'行情查詢模組載入中…',activeETF:()=>window.TradeCompassActiveETF?.html()||'主動 ETF 模組載入中…'})[active]();document.title=`${navTitle()}｜移動停利停損管理`;}
+function render(){const idmap={overview:'overview',transactions:'transactions',tracking:'tracking',settings:'settings',data:'data',cathay:'cathay',about:'about',institutions:'institutions',etfSim:'etfSim',stockSearch:'stockSearch',activeETF:'activeETF',indexETF:'indexETF'};document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===active);b.setAttribute('aria-current',b.dataset.page===active?'page':'false');});$('#breadcrumbCurrent').textContent=navTitle();const main=$('#main');main.innerHTML=({overview,transactions,tracking,settings,data:dataPage,cathay:cathayPage,about:aboutPage,institutions:()=>window.TradeCompassInstitutional?.html()||'<div class="inst-loading">載入法人查詢模組中…</div>',etfSim:()=>window.TradeCompassETF?.html()||'ETF 試算模組載入中…',stockSearch:()=>window.TradeCompassMarket?.html()||'行情查詢模組載入中…',activeETF:()=>window.TradeCompassActiveETF?.html()||'主動 ETF 模組載入中…',indexETF:()=>window.TradeCompassIndexETF?.html()||'指數型 ETF 模組載入中…'})[active]();document.title=`${navTitle()}｜移動停利停損管理`;}
 function openModal(kind,item=null){editing={kind,id:item?.id||null};const trade=kind==='trade';const v=item||{};const heading=trade?(item?'編輯交易紀錄':'新增交易紀錄'):(item?'編輯每日行情':'新增每日行情');
  const fields=trade?`<div class="form-group"><label for="mdate">成交日期 *</label><input id="mdate" type="date" class="field" required value="${E(v.date||today())}" /></div><div class="form-group"><label for="msymbol">股票代號 *</label><input id="msymbol" class="field" maxlength="20" placeholder="例如 0050" required value="${E(v.symbol||'')}" /></div><div class="form-group"><label for="mname">股票名稱（選填）</label><input id="mname" class="field" maxlength="60" placeholder="例如 元大台灣50" value="${E(v.name||'')}" /></div><div class="form-group"><label for="mside">方向 *</label><select class="field" id="mside"><option value="buy" ${v.side!=='sell'?'selected':''}>買進／加碼</option><option value="sell" ${v.side==='sell'?'selected':''}>賣出／減碼</option></select></div><div class="form-group"><label for="mshares">成交股數 *</label><input id="mshares" type="number" class="field" min="0.000001" step="any" required placeholder="100" value="${v.shares??''}" /></div><div class="form-group"><label for="mprice">每股成交價 *</label><input id="mprice" type="number" class="field" min="0.000001" step="any" required placeholder="100.00" value="${v.price??''}" /></div><div class="form-group"><label for="mfee">手續費（元）</label><input id="mfee" type="number" class="field" min="0" step="any" value="${v.fee??0}" /></div><div class="form-group"><label for="mtax">交易稅（元）</label><input id="mtax" type="number" class="field" min="0" step="any" value="${v.tax??0}" /></div><div class="form-group full"><label for="mnote">備註（選填）</label><input id="mnote" class="field" maxlength="200" placeholder="例如 回檔加碼" value="${E(v.note||'')}" /></div>`
  :`<div class="form-group"><label for="mdate">追蹤日期 *</label><input id="mdate" class="field" type="date" required value="${E(v.date||today())}" /></div><div class="form-group"><label for="msymbol">股票代號 *</label><input id="msymbol" class="field" maxlength="20" placeholder="例如 0050" required value="${E(v.symbol||stockFilter||'')}" /></div><div class="form-group"><label for="mhigh">當日最高價 *</label><input id="mhigh" type="number" class="field" min="0.000001" step="any" required value="${v.high??''}" /></div><div class="form-group"><label for="mlow">當日最低價 *</label><input id="mlow" type="number" class="field" min="0.000001" step="any" required value="${v.low??''}" /></div><div class="form-group full"><label for="mclose">當日收盤價 *</label><input id="mclose" type="number" class="field" min="0.000001" step="any" required value="${v.close??''}" /></div>`;
