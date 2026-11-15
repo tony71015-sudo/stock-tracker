@@ -1,35 +1,39 @@
-# Trade Compass v1.6.9 — 圖表 X/Y 軸、分割標記與官方配息重讀
+# Trade Compass v1.7.0｜006208 後台配息檔案
 
-## 內容
+## 這份修正解決什麼
 
-本版只更新專案根目錄 `index_etf_returns.js`，沿用 v1.6.8 的定期定額、額外加碼、分割、配息、XIRR 與本機歷史資料功能。
+你的 006208 股價已有資料，但前台 `data/index-etf/dividends/006208.json` 回傳 404。此包直接提供一份符合 `index_etf_returns.js` 既有格式的 **006208 官方資料核對起始檔**，加上獨立自動更新工作流程。
 
-- 「ETF 原始收盤價」及「投資組合總損益」分別提供 X 軸日期、Y 軸金額刻度、背景參考線。
-- 滑鼠移至圖表可查看指定交易日的詳細價格或損益；損益圖的提示包括當日持股與累計投入。
-- 0050 的 2025-06-18 **1 拆 4**會顯示垂直標記。原始股價出現分割落差屬正常；損益圖應按分割後股數計算。
-- 0050、006208 自動讀取已發布的 `data/index-etf/dividends/{代號}.json`，提供「重新讀取官方配息資料」按鈕。009816 按不分配收益政策處理。
-- 如果配息資料缺失或沒有有效事件，頁面顯示警告，**不把缺值視為 0**。
+提供三個檔案：
+
+1. `data/index-etf/dividends/006208.json`：已核對的 7 筆配息事件（2023–2026），**不是完整上市至今歷史**，各筆來源為富邦投信配息公開資料。
+2. `scripts/update_006208_dividends.py`：嘗試從 TWSE 和富邦投信年度頁查詢更多紀錄，只併入可驗證的事件；失敗不刪既有資料。
+3. `.github/workflows/update-006208-dividends.yml`：獨立定期執行並安全提交 `006208.json`，不碰三大法人與其他 ETF 工作流程。
 
 ## 安裝
 
-1. 備份 GitHub 根目錄既有 `index_etf_returns.js`。
-2. 把 ZIP 內的 `index_etf_returns.js` 上傳到專案根目錄並覆蓋，提交至 `main`。
-3. 執行**你已確認能成功的** GitHub Pages 發布流程。注意：需包含 `index_etf_returns.js` 在公開網站檔案中；此 ZIP **不修改 Actions YAML**。
-4. 網站切換「指數型 ETF × 法人」，按 Ctrl+F5。確認 `https://tony71015-sudo.github.io/stock-tracker/index_etf_returns.js` 不再回 404。
-5. 選 0050 / 006208、選含息模式後按「重新讀取官方配息資料」。
+將三檔放到 GitHub **相同相對路徑**，提交至 `main`。到 Actions 執行「更新006208富邦台50官方配息（保存後台）」；第一次可選 `full=true` 試查上市後歷年配息。**上游網頁結構可能變更，因此不能保證自動補齊**。
 
-## 配息資料格式
+成功後檢查：
 
-網站既有 JSON 路徑：`data/index-etf/dividends/0050.json`、`006208.json`。
+- [GitHub 後台資料檔](https://github.com/tony71015-sudo/stock-tracker/blob/main/data/index-etf/dividends/006208.json)
+- [GitHub Pages 前台資料檔](https://tony71015-sudo.github.io/stock-tracker/data/index-etf/dividends/006208.json)
 
-```json
-{"etf":"0050","events":[{"exDate":"YYYY-MM-DD","paymentDate":"YYYY-MM-DD","amount":0.0}]}
+**重要：如果後台 GitHub 檔案存在，但 GitHub Pages 連結還是 404，代表網站發布流程未包含 `data/index-etf/dividends/`。** 此時需在你已正常運作的 `Stage public website assets` 階段加入：
+
+```bash
+mkdir -p _site/data/index-etf
+cp -R data/index-etf/dividends _site/data/index-etf/
 ```
 
-以上為格式說明而非可用的真實紀錄。有效紀錄需以正式日期與正的每股配息填寫，並核對投信公告。**如果 GitHub 只有資料庫 JSON、Pages 未部署 JSON，按重新讀取仍會顯示 404。**
+這個補丁**不會擅自修改現有部署 YAML**，也不會自動發布整站。你可以讓已正常執行的網站發布流程納入上述檔案，或請 Codex 只修改發布清單。
 
-本版不會自行蒐集或捏造配息，只讀取後台已發布資料。缺少配息時可以匯入經核對 CSV 暫存於本機，或者先把官方 JSON 發布至 GitHub Pages。
+## 配息資料的可信度
 
-## 驗證
+七筆事件可在富邦官方年度配息頁核對（2023、2024、2025、2026）；早期年份有缺漏，**不得把未收錄的年份當作零配息**。未來除息日／發放日未確定的預告也不會當成已領取配息。
 
-已通過 Node.js 語法檢查與模擬圖表／配息 JSON 測試，未在你的 GitHub Pages 實際部署。建議先確認線上主程式檔案發布成功，再測試圖表與配息。
+- 富邦 2024: https://www.fubon.com/asset-management/fund/dividends/by_yield?Fd=0&contact=1&toDate=2024
+- 富邦 2025: https://www.fubon.com/asset-management/fund/dividends/by_yield?Fd=0&contact=1&toDate=2025
+- 富邦 ETF 配息: https://websys.fsit.com.tw/FubonETF/Dividend/Detail.aspx?stkId=006208
+
+如果你之後取得完整歷年官方 CSV，可繼續在 `006208.json` 中追加經核對的事件。
