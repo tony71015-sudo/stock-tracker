@@ -1,0 +1,22 @@
+name: 手動整合指數型ETF投資分析介面（不改三大法人）
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Confirm required module exists
+        run: test -s index_etf_focus.js
+      - name: Update index.html only on current main via Contents API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/install_index_etf_focus_remote.py

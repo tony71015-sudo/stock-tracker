@@ -1,0 +1,27 @@
+name: 更新指數型ETF資料完整度（只寫狀態檔）
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '5 13 * * 1-5' # Asia/Taipei weekdays 21:05
+permissions:
+  contents: write
+concurrency:
+  group: index-etf-coverage-only
+  cancel-in-progress: false
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate verified index ETF portfolios and source files
+        run: python scripts/build_index_etf_coverage.py
+      - name: Publish only index ETF availability report (no git rebase)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python scripts/publish_index_etf_coverage.py
