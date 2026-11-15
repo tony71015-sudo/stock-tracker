@@ -7,8 +7,8 @@ on:
         type: boolean
         default: true
       backfill_days:
-        description: '006208 嘗試查詢最近幾個交易日（1-12）'
-        default: '4'
+        description: '006208 既有官方持股歷史回查日數（最多12）；0050及009816依來源可得日期每日累積'
+        default: '12'
   schedule:
     - cron: '40 11 * * 1-5'  # 台灣時間 19:40
 permissions:
@@ -36,7 +36,7 @@ jobs:
           set -uo pipefail
           flags=()
           if [ "${DISPATCH_THIRD_PARTY:-true}" != 'false' ]; then flags+=(--allow-third-party); fi
-          days="${DISPATCH_DAYS:-4}"
+          days="${DISPATCH_DAYS:-12}"
           for code in 0050 006208 009816; do
             echo "::group::${code} holdings"
             python scripts/update_index_etf_holdings.py --code "$code" --backfill-days "$days" "${flags[@]}" || echo "::warning::${code} parser/runtime error; see above"
@@ -58,8 +58,9 @@ jobs:
             if [ -d /tmp/tc-index-etf-data/history ]; then cp -an /tmp/tc-index-etf-data/history/. data/index-etf/history/; fi
             if [ -d /tmp/tc-index-etf-data/capture-status ]; then cp -a /tmp/tc-index-etf-data/capture-status/. data/index-etf/capture-status/; fi
             python scripts/rebuild_index_etf_indexes.py
+            python scripts/report_index_etf_12days.py
             python scripts/patch_index_etf_validation.py
-            git add data/index-etf/history data/index-etf/indexes data/index-etf/capture-status index_etf.js
+            git add data/index-etf/history data/index-etf/indexes data/index-etf/capture-status data/index-etf/coverage/twelve-day-goal.json index_etf.js
             if git diff --cached --quiet; then
               echo 'No new snapshots or status changes'
               break
@@ -73,7 +74,9 @@ jobs:
             echo "::warning::Remote changed; safe retry ${trial}"
             sleep 2
           done
-          echo '## ETF 持股匯入結果' >> "$GITHUB_STEP_SUMMARY"
+          echo '## ETF 持股匯入結果（目標：各12個有效日期）' >> "$GITHUB_STEP_SUMMARY"
+          python scripts/report_index_etf_12days.py
+          python -c 'import json; r=json.load(open("data/index-etf/coverage/twelve-day-goal.json")); [print("- %s: %s/12 日；還差 %s 日" % (c,x["availableTradingDates"],x["remainingToTarget"])) for c,x in r["funds"].items()]' >> "$GITHUB_STEP_SUMMARY"
           for code in 0050 006208 009816; do
             echo "### $code" >> "$GITHUB_STEP_SUMMARY"
             if [ -f "data/index-etf/capture-status/$code.json" ]; then
