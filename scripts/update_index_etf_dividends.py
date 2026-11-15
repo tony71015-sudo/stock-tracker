@@ -14,6 +14,7 @@ import urllib.parse
 import urllib.request
 
 CODES = ('0050', '006208', '009816')
+LISTED = {'0050':'2003-06-30','006208':'2012-07-17','009816':'2026-02-03'}
 OUT = pathlib.Path('data/index-etf/dividends')
 URL = 'https://www.twse.com.tw/rwd/zh/ETF/etfDiv'
 
@@ -61,7 +62,7 @@ def parse_history(payload, code, today=None):
             if symbol != code:
                 continue
             ex = parse_date(row[ex_idx]); pay = parse_date(row[pay_idx]); amount = parse_amount(row[amt_idx])
-            if not ex or not pay or amount is None or pay < ex or ex > today.isoformat():
+            if not ex or not pay or amount is None or pay < ex or ex > today.isoformat() or ex < LISTED[code]:
                 invalid += 1
                 continue
             ev[ex] = {'exDate':ex,'paymentDate':pay,'amount':amount}
@@ -72,7 +73,7 @@ def parse_history(payload, code, today=None):
 
 def fetch(code, retries=3):
     query = urllib.parse.urlencode({
-        'stkNo':code,'startDate':'20050101',
+        'stkNo':code,'startDate':max('20050101', LISTED[code].replace('-', '')),
         'endDate':dt.date.today().strftime('%Y%m%d'), 'response':'json'})
     req = urllib.request.Request(URL+'?'+query, headers={
         'User-Agent':'Mozilla/5.0 (compatible; TradeCompassResearch/1.0)',
@@ -115,9 +116,16 @@ def update(code, payload=None):
     combined={x['exDate']:x for x in old.get('events',[]) if isinstance(x,dict) and x.get('exDate')}
     combined.update({x['exDate']:x for x in events})
     out={'schema':1,'etf':code,'source':'TWSE ETF etfDiv',
-         'sourceUrl':URL,'coverageStart':'2005-01-01','completeBefore2005':False,
+         'sourceUrl':URL,'coverageStart':max('2005-01-01', LISTED[code]),'completeBefore2005':False,
          'asOf':dt.date.today().isoformat(),'invalidRows':invalid,
          'events':sorted(combined.values(),key=lambda x:x['exDate'])}
+    # The earliest verified event is not proof that every earlier period was covered.
+    out['listingDate'] = LISTED[code]
+    out['firstEventDate'] = out['events'][0]['exDate']
+    out['lastEventDate'] = out['events'][-1]['exDate']
+    out['verificationStatus'] = 'history-not-individually-audited'
+    out['warning'] = ('Official query covers from 2005-01-01; earlier 0050 history requires cross-check.'
+                      if code == '0050' else 'Validate all issuer distributions since 2012 listing; no event must not be inferred from missing records.')
     path.write_text(json.dumps(out,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8')
     print(f'{code}: distributions={len(out["events"])} invalid_rows={invalid} as_of={out["asOf"]}')
     return out
