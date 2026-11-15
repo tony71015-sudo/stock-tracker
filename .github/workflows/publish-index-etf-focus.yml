@@ -1,0 +1,63 @@
+name: 手動發布指數型ETF投資分析介面
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: trade-compass-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout main (read only)
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Integrate focus UI into build copy only
+        run: |
+          python3 scripts/install_index_etf_focus.py --file index.html
+          test -s index_etf_focus.js
+          grep -q 'index_etf_focus.js' index.html
+
+      - name: Stage complete public web files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          shopt -s nullglob
+          for file in *.html *.css *.js *.ico *.png *.svg *.webp *.jpg *.jpeg *.json *.txt; do
+            [ -f "$file" ] && cp "$file" _site/
+          done
+          test -s _site/index.html
+          test -s _site/index_etf_focus.js
+          for dir in data assets images img fonts; do
+            if [ -d "$dir" ]; then cp -a "$dir" "_site/$dir"; fi
+          done
+          touch _site/.nojekyll
+          echo "Published files:"
+          ls -l _site/index.html _site/index_etf_focus.js
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload website artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
