@@ -1,43 +1,44 @@
-# Trade Compass v1.6.6 — 006208 歷史覆蓋檢查與 009816 不配息修正
+# Trade Compass v1.6.8 — 股息不投入／股息再投入計算修復
 
-## 為什麼要修正
+## 用途
 
-- 006208 **已經**存在於 v1.6.5 的 `LISTED` 名單（上市日 `2012-07-17`），不是原本被遺漏。但目前無法從本更新包證實使用者 GitHub 的 006208 歷史 JSON 是否完整，也無法排除 GitHub Pages 的發布資料缺漏。本版不虛構歷史收盤價。
-- 006208 官網政策是**每年兩次收益分配**，應保留配息查詢及資料缺漏警示。
-- 009816 凱基台灣 TOP50 官方明確公告「收益分配：不分配」。故現金配息事件清單為空是正常設計，**不等於 API 失敗**；基金內部收益反映在淨值／市場價格，不產生投資人的配息再投入交易。
+修正「指數型 ETF × 三大法人」中的「指數型 ETF 股價與投入報酬試算」功能。
 
-## 你目前只需要上傳 4 個檔案
+### 確認的程式問題
 
-1. `scripts/update_index_etf_prices.py`：**覆蓋**原檔；優先處理 006208 的上市日至今歷史月資料，新增每檔覆蓋報告。沒有任何股價時仍產生 `006208.coverage.json` 讓你能看見失敗原因。
-2. `scripts/update_index_etf_dividends.py`：**覆蓋**原檔；009816 不向配息 API 強求不存在的配息，改寫出含政策註明的 `events: []`，0050/006208 仍照原官方歷史擷取流程。
-3. `.github/workflows/update-index-etf-prices.yml`：**覆蓋**原檔；先抓 006208（一般執行每次最多補 42 個缺漏月份），再處理 0050、009816。保留既有安全發布程式 `scripts/publish_index_etf_prices.py`，本 ZIP **不覆蓋**該檔。工作流程本身不修改其他 workflow。
-4. `index_etf_returns.js`：**覆蓋**原檔；保留 v1.6.4 定期定額、加碼、分割、手動補價與 XIRR 計算。009816 含息模式不再因缺少配息 JSON 失效，006208 顯示後台資料覆蓋率。
+1. 舊版含息模式若未成功讀取 `data/index-etf/dividends/0050.json` 或 `006208.json`，整塊績效試算被關閉；新版保留可確認的純價格績效，並明確指出含息資料不足，絕不把未取得的股息視為 0。
+2. 舊版績效曲線只在有買入／分割／再投入事件日更新，不能精確顯示最後收盤日的損益。新版從首筆成交後，逐個有效收盤日重新計算市值、損益及最大／最小收益。
+3. 可選擇匯入已核對配息 CSV，在官方 JSON 缺漏時提供本機研究用補充資料。官方同日期配息事件優先；本機資料不會寫入公開 GitHub。
+4. 0050 2025-06-18 分割股數增加、股利再投入後增加股數但不增加外部投入本金、每月定期定額與單筆加碼維持原狀。
 
-> 如你在 v1.6.4 之後曾自行用 Codex 修改 `index_etf_returns.js`，請先在 GitHub 比較差異，不要直接覆蓋更新版本。
+## 安裝（僅一個檔案）
 
-## 安裝 / 執行
+1. 先備份 GitHub 根目錄現有的 `index_etf_returns.js`。
+2. 在 `https://github.com/tony71015-sudo/stock-tracker` 專案根目錄，上傳並覆蓋本 ZIP 的 `index_etf_returns.js`，提交至 `main`。
+3. 由你目前正常使用的網站發布流程部署。**若網站還在執行舊版 JavaScript，需要確認 GitHub Pages 部署過程會包含此檔。**
+4. 在網站「指數型 ETF × 法人」頁面，選 0050 或 006208，儲存定期定額／新增單筆投入，再切換三個收益模式。
 
-在 GitHub 將四檔依照相對路徑上傳並 Commit 至 main，前往 Actions 執行 `更新指數型 ETF 官方歷史股價（自動補缺）`，建議 `full=false`，多跑數次直至 006208 缺漏月數下降。`full=true` 會嘗試重取全歷史資料，耗時且可能碰到官方節流。
+## 配息 CSV 格式
 
-**驗證 GitHub repo**：
+```csv
+exDate,paymentDate,amount
+2025-01-01,2025-01-30,1.5
+```
 
-- `data/index-etf/prices/006208.json`：`rows` 是否有 2012 年後的有效日期。
-- `data/index-etf/prices/006208.coverage.json`：`rows`、`earliestSaved`、`latestSaved`、`missingMonthCount`、`failedRequests`。
-- `data/index-etf/dividends/009816.json`：`distributionPolicy: none`、`events: []`（合法的零配息政策）。
+**上述僅為格式範例，非實際配息紀錄，不可直接匯入作為真實資料。** 必須先查核除息日、發放日與每單位金額。
 
-**驗證 GitHub Pages**：
+官方 JSON 路徑：
+- `data/index-etf/dividends/0050.json`
+- `data/index-etf/dividends/006208.json`
 
-- `https://tony71015-sudo.github.io/stock-tracker/data/index-etf/prices/006208.json`
-- `https://tony71015-sudo.github.io/stock-tracker/data/index-etf/prices/006208.coverage.json`
-- `https://tony71015-sudo.github.io/stock-tracker/index_etf_returns.js`
+若官方資料缺少或無法下載，不能自動推算過去股息。僅使用本機 CSV 的含息績效也會標示資料來源不足。
 
-若 repo 有資料但 Pages 是 404 或仍是舊資料，問題在網站**發布流程**：需確保 `_site/` 複製 `index_etf_returns.js`、`data/index-etf/prices/`、`data/index-etf/dividends/`。本補丁為降低風險，**沒有**再次自動修改三大法人或 GitHub Pages 發布的 workflow。
+## 測試
 
-## 使用風險
+通過 Node.js 語法及模擬測試：0050 1 拆 4、最新收盤價市值、股息留現金、下一個交易日股利再投入、沒有增加外部本金、009816 不分配收益、配息 CSV 解析與介面標記。**尚未在你的 GitHub Actions／GitHub Pages 上實際部署驗證。**
 
-歷史價格是未還原收盤價；ETF 分割及配息需由回測模組分開處理。006208 的缺漏月份報告只表示某個月份是否至少有一筆股價，**不是每日完整度保證**。缺值不會以前一日行情補造。009816 無現金配息不等於沒有底層股利收入，也不等於網站能準確預測報酬。ETF 基金政策若未來改變須更新本規則。投資前需與官方資訊交叉核對。
+## 重要提醒
 
-資料來源：
-- 凱基 009816 官方基金資料：https://www.kgifund.com.tw/Fund/Detail?fundID=J023
-- 富邦 006208 官方基金資料：https://websys.fsit.com.tw/FubonETF/Fund/Profile.aspx?stkId=006208
-- 證交所個股日成交資訊：https://accessibility.twse.com.tw/zh/trading/historical/stock-day.html
+- 這份修正只更換前端 JS，不會自動發布或創造歷史配息檔案。
+- 配息計算由除息前持股決定，實際發放日後才可用於再投入；再投入以下一可得交易日收盤價模擬，實際交易結果可能不同。
+- 歷史數據可能不完整或有錯誤；投資前應以投信官方資料交叉核對。
