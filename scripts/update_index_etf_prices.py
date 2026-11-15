@@ -99,6 +99,17 @@ def save_archive(code: str, rows: dict, errors: list, today: dt.date):
     path = ROOT / f'{code}.json'
     if not rows:
         print(f'WARNING {code}: no valid official historical prices; not writing an empty archive', flush=True)
+        # Still publish a diagnostic record, rather than silently omitting 006208.
+        ROOT.mkdir(parents=True, exist_ok=True)
+        eligible = max(LISTED[code], STOCK_DAY_FIRST)
+        target = [f'{y}-{m:02d}' for y, m in months(eligible, today)]
+        diag = ROOT / f'{code}.coverage.json'
+        diag.write_text(json.dumps({'etf': code, 'listingDate': LISTED[code].isoformat(),
+              'source': URL, 'rows': 0, 'targetMonths': len(target), 'monthsWithPrices': 0,
+              'missingMonthCount': len(target), 'missingMonthExamples': target[:40],
+              'failedRequests': errors[:40], 'status': 'no-data',
+              'generatedAtUTC': dt.datetime.now(dt.timezone.utc).isoformat()},
+              ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
         return
     values = [[d, rows[d]] for d in sorted(rows)]
     payload = {'schema': 1, 'etf': code, 'source': 'TWSE STOCK_DAY',
@@ -109,10 +120,16 @@ def save_archive(code: str, rows: dict, errors: list, today: dt.date):
     tmp = path.with_suffix('.json.tmp')
     tmp.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
     os.replace(tmp, path)
+    eligible = max(LISTED[code], STOCK_DAY_FIRST)
+    target = [f'{y}-{m:02d}' for y, m in months(eligible, today)]
+    present = {date[:7] for date in rows}
+    missing_months = [m for m in target if m not in present]
     status = {'etf': code, 'listingDate': LISTED[code].isoformat(),
               'source': URL, 'earliestQuerySupported': STOCK_DAY_FIRST.isoformat(),
               'earliestSaved': values[0][0], 'latestSaved': values[-1][0],
-              'rows': len(values), 'failedRequests': errors[:40],
+              'rows': len(values), 'targetMonths': len(target), 'monthsWithPrices': len(target)-len(missing_months),
+              'missingMonthCount': len(missing_months), 'missingMonthExamples': missing_months[:40],
+              'failedRequests': errors[:40],
               'pre2010OfficialDataUnavailable': code == '0050',
               'warning': ('STOCK_DAY cannot supply 0050 2003-2009 data; use a verified alternate source.'
                           if code == '0050' else None),
@@ -120,6 +137,7 @@ def save_archive(code: str, rows: dict, errors: list, today: dt.date):
     # Diagnostic status kept separate, so front-end price schema stays unchanged.
     diag = ROOT / f'{code}.coverage.json'
     diag.write_text(json.dumps(status, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    print(f'COVERAGE {code}: {len(values)} days; {len(target)-len(missing_months)}/{len(target)} months; missing={len(missing_months)}; earliest={values[0][0]}; latest={values[-1][0]}', flush=True)
 
 
 def run(code: str, today: dt.date, max_missing: int, pause: float, full: bool):

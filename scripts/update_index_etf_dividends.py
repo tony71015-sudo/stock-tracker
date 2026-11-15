@@ -93,6 +93,17 @@ def update(code, payload=None):
     if path.exists():
         try: old=json.loads(path.read_text(encoding='utf-8'))
         except (OSError,ValueError): pass
+    # Official fund policy: 009816 does not distribute income. This is a
+    # verified policy, not a missing-data condition and not a cash distribution.
+    if code == '009816':
+        out = {'schema': 1, 'etf': code, 'source': 'KGI fund profile',
+               'sourceUrl': 'https://www.kgifund.com.tw/Fund/Detail?fundID=J023',
+               'distributionPolicy': 'none', 'policyVerifiedAsOf': '2026-11-15',
+               'listingDate': '2026-02-03', 'asOf': dt.date.today().isoformat(),
+               'events': [], 'note': '收益不分配；不得將無現金配息誤判為歷史缺漏'}
+        path.write_text(json.dumps(out, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
+        print('009816: official non-distributing ETF; empty events is expected, not missing')
+        return out
     if payload is None: payload=fetch(code)
     events,invalid=parse_history(payload,code)
     if not events:
