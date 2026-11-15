@@ -1,25 +1,30 @@
-# Trade Compass：指數型 ETF 報酬試算分頁，直接修改並立即發布（v2）
+# Trade Compass — ETF 報酬專頁 + 網站修正警示（v3）
 
-## 修正內容
+## 此次修改
 
-- 左側選單／導覽標題：**指數型 ETF 報酬試算**
-- 頁面主標題：**指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）**
-- 只顯示 0050／006208／009816 的基金選擇器，以及原本的報酬試算模組；不再顯示持股比較、法人資訊或持股 CSV 匯入。
-- 不改動 ETF 股價、配息、持股歷史、三大法人、股票行情資料，也不重寫投資報酬公式。
-- 此版本在**同一個工作流程**內先修改 `index_etf.js`、`index.html`、提交，再編排 `_site`，最後直接部署 GitHub Pages；不需重跑既有三大法人／行情發布工作流程。
+1. **所有分頁固定顯示資料修正警示**：網站功能與資料仍在修正及驗證中，部分資料可能有誤；採用前請核對證交所、櫃買中心及投信官方公布的資訊。
+2. **「查看修改說明與目前已知限制」可展開**：說明 2026/11/15 修改與 0050、006208、009816 持股日期、行情來源的已知限制，並列官方查核網址。
+3. **指數型 ETF 分頁只保留報酬試算**：側邊選單「指數型 ETF 報酬試算」；完整頁面標題「指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）」。不顯示原本的持股比對、三大法人與 CSV 匯入。
+4. **不觸碰既有抓取／資料檔**：不修改三大法人、行情資料及 006208 已有的持股快照；本修正**不宣稱**改善上櫃數據抓取成功率，也不補造任何歷史 ETF 持股。
 
-## 安裝：只上傳兩個檔案
+## 安裝（3 個檔案）
 
-1. `scripts/force_returns_only.py` → GitHub 的 `scripts` 資料夾。
-2. `.github/workflows/publish-returns-only-direct.yml` → GitHub 的 `.github/workflows` 資料夾。
-3. 提交 `main` 後，進入 GitHub → Actions → **立即修正並發布指數型ETF報酬試算專頁** → **Run workflow**（開一個新的 run，不使用舊 run 的 Re-run jobs）。
-4. 確認 **Directly fix ETF page source**、**Stage website without editing other workflows**、**Deploy GitHub Pages** 皆為綠色。
-5. 以 `Ctrl+Shift+R` 強制重新整理 `https://tony71015-sudo.github.io/stock-tracker/`；左側選單應改為「指數型 ETF 報酬試算」。
+依 ZIP 內相對路徑，將三個檔案傳到 GitHub `main`：
 
-## 重要提醒
+- `scripts/force_returns_only.py`
+- `scripts/add_site_notice.py`
+- `.github/workflows/publish-returns-notice.yml`
 
-- 網站必須已在 `index.html` 載入 `index_etf_returns.js`，否則腳本會安全停止而不是留下空白頁。
-- 過去的舊發布流程如果之後又從**舊版提交**發布，仍可能蓋掉新畫面；此工作流程會直接提交兩個網站原始碼，正常情況下後續從 main 發布也會保持新畫面。
-- 不要將整個 ZIP 直接放在儲存庫根目錄。需解壓縮並保持相對路徑。
-- 如果執行失敗，請提供該工作流程**第一個紅色步驟**的完整錯誤文字。不要盲目繼續更改其他工作流程。
-- 這份程式已用先前保存的 `index.html` 和 `index_etf.js` 完成兩次重複安裝與 JavaScript 語法測試；尚未直接取得你的最新 main 原始碼，也尚未在你的 GitHub 實際執行。
+**執行**：進入 GitHub → Actions →「修正ETF報酬頁面並顯示網站資料警示」→ **Run workflow**（啟動一個新的 run）。
+
+工作流程依序修改 `index_etf.js`、`index.html`，檢查資料警示和標題，提交兩個檔案，整理 `_site` 並直接發布 Pages。不要另外同時觸發其他 Pages 部署流程；以免同時發布時出現競爭或舊內容覆蓋。
+
+成功後使用 `Ctrl + Shift + R` 強制重新整理。警示應位於最上方導覽列下；修改說明可展開。ETF 分頁應只剩報酬試算。
+
+### 如果失敗
+
+提供 GitHub Actions **第一個紅色步驟的錯誤文字**。若已有另一個工作流程同時上傳 `github-pages` artifact，應先停止重複部署，勿在同一 run 裡上傳兩次同名 artifact。
+
+## 已驗證與限制
+
+已在先前提供的 v1.5.4 網站原始碼副本上測試：第一次及重複執行不重複插入公告；HTML 標題、警示及修改說明均會保留；`index_etf.js` 通過 JavaScript 語法檢查。這**不等於**已在你目前 GitHub `main` 分支或 GitHub Pages 實測成功。若最新 HTML 不符合預期，程式會停止，不會強行改寫。
