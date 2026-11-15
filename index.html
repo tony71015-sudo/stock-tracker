@@ -98,7 +98,6 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
 </script>
 <script src="active_etf.js" defer></script>
 <script src="index_etf.js" defer></script>
-<script src="index_etf_focus.js" defer></script>
 <script src="index_etf_returns.js" defer></script>
 </head>
 <body>
@@ -114,7 +113,7 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
       <button class="nav-btn" data-page="etfSim"><span class="nav-ico">◫</span> ETF 40 年獲利試算</button>
       <button class="nav-btn" data-page="stockSearch"><span class="nav-ico">⌕</span> 股票行情查詢</button>
       <button class="nav-btn" data-page="activeETF"><span class="nav-ico">◈</span> 主動式 ETF 持股異動</button>
-      <button class="nav-btn" data-page="indexETF"><span class="nav-ico">▥</span> 指數型 ETF × 法人</button>
+      <button class="nav-btn" data-page="indexETF"><span class="nav-ico">▥</span> 指數型 ETF 報酬試算</button>
       <button class="nav-btn" data-page="tracking"><span class="nav-ico">⌁</span> 價格追蹤</button>
       <button class="nav-btn" data-page="settings"><span class="nav-ico">⚙</span> 策略設定</button>
       <button class="nav-btn" data-page="data"><span class="nav-ico">⇩</span> 資料匯入與備份</button>
@@ -307,7 +306,7 @@ function save(){try{localStorage.setItem(STORAGE,JSON.stringify(db));persisted=t
 function notify(msg){const el=$('#toast');if(!el)return;el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3400);}
 const nameOf=s=>{const recent=[...db.transactions].reverse().find(t=>t.symbol===s&&t.name);return recent?.name||s;};
 const holdings=()=>C.totals(db.transactions,db.quotes,asOf,db.settings,db.manualPrices);
-function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'股票行情查詢',activeETF:'主動式 ETF 持股異動',indexETF:'指數型 ETF × 三大法人'})[active];}
+function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'股票行情查詢',activeETF:'主動式 ETF 持股異動',indexETF:'指數型 ETF 報酬試算'})[active];}
 function head(eyebrow,title,sub,buttons='') {return `<div class="head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${sub}</p></div><div class="actions">${buttons}</div></div>`;}
 function pill(status){if(status.includes('觸及'))return `<span class="tag red">● ${E(status)}</span>`;if(status==='移動停利中')return `<span class="tag mint">● 移動停利中</span>`;if(status==='未啟動')return `<span class="tag gold">○ 未啟動</span>`;return `<span class="tag slate">${E(status||'—')}</span>`;}
 function empty(title,desc,action=''){return `<div class="empty-hero"><div class="empty-icon">⌁</div><h3>${title}</h3><p>${desc}</p>${action}</div>`;}

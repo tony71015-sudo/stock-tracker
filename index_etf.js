@@ -86,7 +86,23 @@ function importCsv(text){const rows=csvParse(text);if(rows.length<2)throw Error(
  let count=0;for(const [key,holdings] of groups){const[etf,date]=key.split(':');const snap=validateSnapshot({etf,date,holdings,kind:'manual',verified:false,source:'使用者匯入的實際投資組合（未經官方自動核對）'},etf,date);
  (state.local.snapshots[etf]??={})[date]=snap;count++;}
  localStorage.setItem(KEY,JSON.stringify(state.local));state.message=`已將 ${count} 個日期的持股明細存入本機（未經官方自動核對）。`;loadFund();}
-function render(){if(!state.initialized){state.initialized=true;loadInstitutional();loadFund();}
+function render(){
+  /* TC_INDEX_RETURNS_ONLY_V1 */
+  if (!state.initialized) state.initialized = true;
+  const fundOptions = Object.entries(FUNDS).map(([code,name]) =>
+    `<option value="${code}"${code === state.fund ? ' selected' : ''}>${code} ${esc(name)}</option>`).join('');
+  const returnsContent = window.TradeCompassETFReturns?.html?.(state.fund) ||
+    '<section class="panel" style="padding:22px"><p class="alert">ETF 投資報酬試算模組尚未載入。請確認 index_etf_returns.js 已發布。</p></section>';
+  // The existing investment widget owns dividends, splits, monthly investment and chart logic.
+  // Do not call the old holdings / institutional comparison markup.
+  return `<div class="head"><h1>指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）</h1>
+    <p class="subtitle">以歷史價格試算一次投入、分批加碼與定期定額；配息、分割與總收益依既有試算模組計算。</p></div>
+    <section class="panel" style="padding:20px 23px;margin-bottom:16px"><div class="filter-row">
+      <label for="indexFund">指數型 ETF</label><select id="indexFund" class="field">${fundOptions}</select>
+    </div></section>` + returnsContent.replace(
+      /<h2 class="panel-title">指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）<\/h2>/,
+      '');
+if(!state.initialized){state.initialized=true;loadInstitutional();loadFund();}
  const ds=dates(),cur=get(state.fund,state.date),base=get(state.fund,state.base),rows=comparisons();
  const opts=Object.keys(FUNDS).map(code=>`<option value="${code}" ${state.fund===code?'selected':''}>${code} ${esc(FUNDS[code])}</option>`).join('');
  const days=ds.map(d=>`<option value="${d}" ${state.date===d?'selected':''}>${d}</option>`).join('');
