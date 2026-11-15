@@ -1,53 +1,46 @@
-name: 更新指數型 ETF 每日收盤價
+name: 更新指數型 ETF 官方歷史股價（自動補缺）
 on:
   workflow_dispatch:
     inputs:
-      rebuild:
-        description: '從各 ETF 實際上市月份重新回補完整歷史股價（首次建議選 true）'
+      full:
+        description: '完整重查 2010 年起官方可取得月份（耗時較久）'
         required: false
         type: boolean
         default: false
   schedule:
-    - cron: '30 12 * * 1-5'  # 20:30 Asia/Taipei
+    - cron: '30 12 * * 1-5'  # 20:30 Taiwan (UTC+8)
 permissions:
   contents: write
+concurrency:
+  group: index-etf-prices-history
+  cancel-in-progress: false
 jobs:
-  update-prices:
+  prices:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 55
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout current main
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Fetch official daily market close history
-        run: |
-          if [ '${{ inputs.rebuild }}' = 'true' ]; then
-            python scripts/update_index_etf_prices.py --rebuild
-          else
-            python scripts/update_index_etf_prices.py --backfill --max-months 30
-          fi
-      - name: Fetch official ETF cash distribution history
-        run: python scripts/update_index_etf_dividends.py
-      - name: Publish price and dividend archives without forced push
+      - name: Fetch missing monthly closing prices from official TWSE
         shell: bash
+        env:
+          FULL_BACKFILL: ${{ inputs.full || 'false' }}
         run: |
           set -euo pipefail
+          if [ "$FULL_BACKFILL" = 'true' ]; then
+            python scripts/update_index_etf_prices.py --full --pause 0.6
+          else
+            python scripts/update_index_etf_prices.py --max-missing-months 18 --pause 0.6
+          fi
+      - name: Attempt official dividend updates (retain existing on failure)
+        run: python scripts/update_index_etf_dividends.py
+      - name: Publish archives with conflict-safe date merge
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/index-etf/prices data/index-etf/dividends
-          if git diff --cached --quiet; then echo 'No changes'; exit 0; fi
-          git commit -m 'data: update official index ETF closes and distributions'
-          for i in 1 2 3 4 5; do
-            git fetch origin main
-            if ! git rebase origin/main; then
-              git rebase --abort || true
-              echo 'Conflict while rebasing price data. Stop rather than overwrite other updates.'
-              exit 1
-            fi
-            if git push origin HEAD:main; then exit 0; fi
-            sleep $((i*3))
-          done
-          echo 'Push still rejected after 5 retries'; exit 1
+          python scripts/publish_index_etf_prices.py
