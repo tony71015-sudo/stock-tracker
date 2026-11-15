@@ -1,0 +1,74 @@
+name: 立即修正並發布指數型ETF報酬試算專頁
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
+jobs:
+  modify-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Directly fix ETF page source
+        run: |
+          python scripts/force_returns_only.py
+          node --check index_etf.js
+          python - <<'PY'
+          from pathlib import Path
+          h=Path('index.html').read_text()
+          j=Path('index_etf.js').read_text()
+          assert 'TC_RETURNS_ONLY_DIRECT_V2' in j
+          assert 'index_etf_returns.js' in h
+          assert 'index_etf_focus.js' not in h
+          assert '指數型 ETF 報酬試算' in h
+          assert '指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）' in j
+          print('Source verification PASS')
+          PY
+      - name: Commit source fixes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html index_etf.js
+          if ! git diff --cached --quiet; then
+            git commit -m 'fix: show index ETF returns simulation only'
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
+      - name: Stage website without editing other workflows
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          root=Path('.'); dst=Path('_site')
+          if dst.exists(): shutil.rmtree(dst)
+          dst.mkdir()
+          # Publish existing root assets and all data; avoid processing .github or secrets.
+          for p in root.iterdir():
+              if p.name in {'.git','.github','_site','node_modules','.venv','venv','__pycache__','tests','scripts'}: continue
+              if p.is_file() and p.suffix.lower() in {'.html','.js','.css','.svg','.png','.jpg','.jpeg','.webp','.ico','.json','.txt','.xml','.webmanifest'}:
+                  shutil.copy2(p,dst/p.name)
+              elif p.name in {'data','assets','images','fonts'} and p.is_dir():
+                  shutil.copytree(p,dst/p.name)
+          assert (dst/'index.html').exists()
+          assert (dst/'index_etf.js').exists()
+          assert (dst/'index_etf_returns.js').exists()
+          print('Published files:',len(list(dst.rglob('*'))))
+          PY
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
