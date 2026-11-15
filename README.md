@@ -1,35 +1,38 @@
-# Trade Compass v1.6.4｜定期定額＋缺漏歷史價格補入
+# Trade Compass v1.6.5 — Official ETF historical prices automatic backfill
 
-本補丁以 v1.6.3 `index_etf_returns.js` 修改；只替換**專案根目錄 `index_etf_returns.js`**。不修改 `index.html`、`index_etf.js` 或 `.github/workflows`，避免覆蓋目前 GitHub Actions 修復成果。
+## Purpose
 
-## 功能
+This update replaces the existing `update-index-etf-prices.yml` workflow and price script. It retains the v1.6.4 frontend `index_etf_returns.js` and the exact `rows` schema consumed by that frontend. It does not change active ETF holdings, three-institution flows, index ETF portfolio constituents, or website layout.
 
-1. **每月定期定額**：設定金額、每月扣款日 (1～31)、起迄日。當月沒有 31 日時使用該月最後一日。依預定日期當日或之後的第一筆交易日收盤價模擬成交，但若距離扣款日超過 10 天則跳過該筆並顯示警示，不會跳到幾個月後以錯誤價買入。
-2. **與原有投入合併**：單次加碼、定期定額、股息再投入、0050 2025 年 1 拆 4 同時納入股數與績效；定期定額本金只計入實際模擬成交費用，股息再投入不算外部本金。
-3. **匯入缺漏歷史股價**：在試算頁展開「補入缺少的歷史股價」，上傳 UTF-8 CSV。標題及格式：`date,close`，或 `etf,date,close`；日期採 `YYYY-MM-DD`，價格為**未還原的原始收盤價**。官方資料優先，手動匯入只填補原資料缺漏的日期。每檔 ETF 分開保存至**本瀏覽器 localStorage**，不會上傳到公開網站或改寫證交所資料。
-4. **缺漏月份提示**：顯示從各 ETF 上市月份起到目前，哪些月份沒有任何收盤價資料。注意：月份有至少一天，不代表整月無缺漏；CSV 必須經使用者核對。
+### Official data availability
 
-## 安裝
+| Ticker | Listed | TWSE STOCK_DAY supported query start |
+|---|---|---|
+| 0050 | 2003-06-30 | 2010-01-04 (2003–2009 not returned by this endpoint) |
+| 006208 | 2012-07-17 | Listing date |
+| 009816 | 2026-02-03 | Listing date |
 
-1. 將 ZIP 裡的 `index_etf_returns.js` 放到 GitHub 專案**根目錄**，覆蓋同名檔，Commit changes。
-2. 如果你的 GitHub Pages 專用發布流程會複製檔案到 `_site`，確認該流程已包含 `index_etf_returns.js`，重新部署。
-3. 網站左側「指數型 ETF × 法人」往下捲到「指數型 ETF 股價與投入報酬試算」，應看到「每月定期定額」及「補入缺少的歷史股價」。用 Ctrl+F5 更新快取。
-4. **官方自動回補**沿用既有 `.github/workflows/update-index-etf-prices.yml`，其一般排程執行 `--backfill --max-months 30`；歷史缺漏不會在本補丁中自動寫入 GitHub，必須等該流程取得資料並成功發布。
+**Critical:** This does NOT automatically reconstruct 0050 2003–2009. Those years require another traceable official source. The tool does not invent prices or use forward filling. Daily prices are original, unadjusted closing prices; dividends and splits are applied by the return calculation module, not pre-adjusted here.
 
-## CSV 格式
+## Files to upload (maintain same GitHub paths)
 
-```csv
-date,close
-2008-10-01,35.5
-2008-10-02,34.9
-```
+1. `scripts/update_index_etf_prices.py` — overwrite
+2. `scripts/update_index_etf_dividends.py` — overwrite or retain if identical (included for a complete package)
+3. `scripts/publish_index_etf_prices.py` — new
+4. `.github/workflows/update-index-etf-prices.yml` — overwrite
 
-這些數字**只是格式示例，不代表真實 ETF 收盤價**，請勿直接匯入作為投資資料。需自行向證交所等可信來源查證後再匯入。手動 CSV 屬個人資料補記，不代表官網已驗證。
+Do NOT upload `__pycache__`. Do NOT run the workflow that modifies workflow YAML files; edit/upload workflow directly from the GitHub UI and commit.
 
-## 限制
+## How to run
 
-- 缺少官方配息歷史時，仍停止含息報酬估算，不會把缺失配息假定為零。
-- 僅支援 0050、006208、009816，並沿用現有模組的 0050 股票分割邏輯；不會自動偵測新的分割事件。
-- CSV 只在目前瀏覽器保存；清除網站資料、換電腦可能遺失。建議自行保留原始 CSV 做備份。
-- 每筆投入採整股、當日或後續最近可用收盤價的試算，不是實際券商成交價格；沒有整股的預算餘額未併入期末模擬資產。
-- 當上游完整股價資料未成功寫入並部署，新增補價只影響本機畫面。切勿視為官方已確認資料。
+In GitHub Actions choose **更新指數型 ETF 官方歷史股價（自動補缺）** and **Run workflow**. Start with `full=false` so that each run attempts 18 missing months for each ETF and refreshes recent months. It is safe to run repeatedly; historical JSON is merged by date. If you want all available months at once, use `full=true` (large number of requests; API may throttle, and partial download is possible). Weekday scheduled runs continue filling gaps automatically.
+
+Inspect `data/index-etf/prices/0050.json`, `006208.json`, `009816.json`, and companion `*.coverage.json` for latest saved date, data ranges and warnings.
+
+### Website deployment
+
+Updating repository data is different from updating the GitHub Pages artifact. Your *existing* publication workflow must include `data/index-etf/prices/` and `data/index-etf/dividends/` in `_site/data/index-etf/`. This patch deliberately does not change publishing workflows because earlier automation edits caused GitHub permissions and Git merge failures. Verify the real published file URL, e.g. `https://tony71015-sudo.github.io/stock-tracker/data/index-etf/prices/0050.json`. If that returns 404 or remains stale, repair the existing Pages publishing workflow separately.
+
+### Safety and interpretation
+
+Official prices can be missing because of market holidays, suspensions, API unavailability or pre-2010 limitations. The data are **unadjusted** close prices. Corporate action split effects must be handled by return simulation; dividend history is a separate dataset. No price interpolation, no invented records. Financial values are for research and need validation against brokerage and issuer records.
