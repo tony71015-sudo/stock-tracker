@@ -1,4 +1,4 @@
-/* Trade Compass v1.6.8 | dividend-mode calculation, daily mark-to-market, verified CSV fallback. */
+/* Trade Compass v1.6.9 | axis charts, split markers, dividend reload, daily mark-to-market, verified CSV fallback. */
 (function(){'use strict';
 const ETF=['0050','006208','009816'];
 const KEY='trade-compass-index-etf-investments-v161'; // preserve existing investment data
@@ -152,7 +152,33 @@ function xirr(cashflows){const items=cashflows.filter(e=>dateValid(e.date)&&Numb
  return ((lo+hi)/2)*100;
 }
 function poly(values,left,top,width,height){const finite=values.filter(Number.isFinite);if(finite.length<2)return '';let lo=Math.min(...finite),hi=Math.max(...finite);if(hi===lo){hi+=1;lo-=1;}return values.map((v,i)=>Number.isFinite(v)?`${(left+i/Math.max(1,values.length-1)*width).toFixed(1)},${(top+height-(v-lo)/(hi-lo)*height).toFixed(1)}`:'').join(' ');}
-function chart(series){if(series.length<2)return '<p class="fine">至少需要兩個交易日才可繪圖。</p>';const labels=[0,Math.floor((series.length-1)/2),series.length-1];return `<div style="overflow-x:auto"><svg viewBox="0 0 820 258" role="img" aria-label="ETF 收盤價與投資損益走勢" style="width:100%;min-width:500px"><text x="12" y="18" font-size="12" fill="currentColor">ETF 收盤價（原始價格）</text><polyline points="${poly(series.map(x=>x.close),58,26,730,86)}" fill="none" stroke="#0f9f91" stroke-width="2.5"/><text x="12" y="142" font-size="12" fill="currentColor">組合損益（元）</text><polyline points="${poly(series.map(x=>x.pnl),58,152,730,68)}" fill="none" stroke="#d97706" stroke-width="2.5"/>${labels.map(i=>`<text x="${58+730*i/Math.max(1,series.length-1)}" y="245" text-anchor="middle" font-size="11" fill="currentColor">${series[i].date.slice(2)}</text>`).join('')}</svg></div>`;}
+// Two independent axis-based charts; raw price chart intentionally shows split gaps.
+function chartPanel(series,key,title,color,unit,fund){
+ const W=900,H=282,left=92,right=30,top=32,bottom=48,pw=W-left-right,ph=H-top-bottom;
+ const values=series.map(s=>Number(s[key]));const min=Math.min(...values),max=Math.max(...values);
+ const padding=Math.max((max-min)*0.08,Math.abs(max)*0.02,0.05);
+ const lo=min-padding,hi=max+padding;const x=i=>left+i*pw/(series.length-1),y=v=>top+(hi-v)*ph/(hi-lo);
+ const points=values.map((v,i)=>`${x(i).toFixed(2)},${y(v).toFixed(2)}`).join(' ');
+ let g=`<div style="overflow-x:auto;margin:14px 0 22px"><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(title)}，有日期及數值刻度，滑鼠移入顯示每日數據" style="width:100%;min-width:580px"><text x="${left}" y="18" font-size="14" font-weight="600" fill="currentColor">${esc(title)}（${esc(unit)}）</text>`;
+ for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,yy=y(v);g+=`<line x1="${left}" x2="${W-right}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="currentColor" stroke-opacity="0.12"/><text x="${left-9}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="11" fill="currentColor">${esc(num(v,key==='close'?2:0))}</text>`;}
+ const ticks=[...new Set([0,Math.floor((series.length-1)/4),Math.floor((series.length-1)/2),Math.floor(3*(series.length-1)/4),series.length-1])];
+ for(const i of ticks){const xx=x(i);g+=`<line x1="${xx.toFixed(1)}" x2="${xx.toFixed(1)}" y1="${top+ph}" y2="${top+ph+5}" stroke="currentColor" stroke-opacity=".5"/><text x="${xx.toFixed(1)}" y="${H-24}" text-anchor="middle" font-size="11" fill="currentColor">${esc(series[i].date.slice(2))}</text>`;}
+ if(fund==='0050')for(const split of SPLITS['0050']){
+  const idx=series.findIndex(s=>s.date>=split.date);if(idx>0&&idx<series.length){const xx=x(idx);g+=`<line x1="${xx.toFixed(1)}" x2="${xx.toFixed(1)}" y1="${top}" y2="${top+ph}" stroke="#c2410c" stroke-dasharray="5 4" stroke-width="2"/><text x="${Math.min(W-right-8,xx+7).toFixed(1)}" y="${top+15}" text-anchor="${xx>W-200?'end':'start'}" font-size="11" font-weight="600" fill="#c2410c">${esc(split.date)}｜1 拆 ${split.ratio}</text>`;}
+ }
+ g+=`<polyline fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" points="${points}"/>`;
+ // Each narrow transparent hit-area exposes the exact data even without JS chart libraries.
+ const hitWidth=Math.max(1.5,Math.min(18,pw/(series.length-1)));
+ for(let i=0;i<series.length;i++){
+  const s=series[i],val=values[i];g+=`<rect x="${(x(i)-hitWidth/2).toFixed(2)}" y="${top}" width="${hitWidth.toFixed(2)}" height="${ph}" fill="transparent" pointer-events="all"><title>${esc(s.date)}｜${esc(title)}：${esc(num(val,2))} ${esc(unit)}${key==='pnl'?`｜持股 ${esc(num(s.shares,4))} 股｜投入 ${esc(num(s.externalPaid,2))} 元`:''}</title></rect>`;
+ }
+ g+=`<text x="${left+pw/2}" y="${H-5}" text-anchor="middle" font-size="11" fill="currentColor">日期（年-月-日）｜滑鼠移至折線區域查看每日值</text></svg></div>`;return g;
+}
+function chart(series,fund){if(series.length<2)return '<p class="fine">至少需要兩個交易日才可繪圖。</p>';
+ return chartPanel(series,'close','ETF 原始收盤價','#0f9f91','元／股',fund)
+  +chartPanel(series,'pnl','投資組合總損益','#d97706','新臺幣元',fund)
+  +(fund==='0050'?'<p class="fine">橘色虛線為 0050 於 2025-06-18 的 1 拆 4 分割日。上圖使用未還原原始收盤價，因此會出現價格斷層；下圖已按分割後持股增加調整，不應將分割價格落差視為實際虧損。</p>':'');
+}
 const metric=(label,val)=>`<div class="panel metric" style="padding:14px"><div class="metric-label">${esc(label)}</div><div class="metric-value" style="font-size:20px">${esc(val)}</div></div>`;
 function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pending[fund]&&(!pricesCache[fund]||!dividendsCache[fund])&&!errors[fund+'_div'])Promise.resolve().then(()=>load(fund));
  const official=pricesCache[fund]||[],prices=mergeLocalPrices(fund,official),dfile=effectiveDividends(fund),ls=lots(fund),fee=Number(store[fund+'_fee']||0),dca=store[fund+'_dca']||{},recurring=monthSchedule(dca),gaps=missingMonths(prices,fund);
@@ -171,19 +197,21 @@ function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pendi
  <p class="fine">適用 0050、006208。CSV 欄位：exDate,paymentDate,amount，日期為 YYYY-MM-DD、金額為每股新臺幣；不得使用推估數字。官方已有的除息日期優先保留。009816 依法定基金政策不配息，不需匯入。</p>
  <div class="filter-row"><input id="idxDivCsvFile" type="file" accept=".csv,text/csv" class="field"/><button id="idxDivCsvImport" class="btn">匯入已核對配息 CSV</button><button id="idxDivCsvClear" class="btn danger">清除本機配息</button></div>
  <p class="fine">本機配息事件 ${Number((localDividends[fund]||[]).length)} 筆。CSV 為本機補充資料，不代表已取得完整歷年股息；需要核對投信官方公告。</p></details>
+ <div class="filter-row" style="margin:8px 0"><button id="idxDivReload" class="btn">重新讀取官方配息資料</button><span class="fine">重新向網站讀取 data/index-etf/dividends/${esc(fund)}.json，查核是否已發布；不會修改你的本機投入資料。</span></div>
  <p class="fine">價格資料：${prices.length?`${prices[0].date}～${prices.at(-1).date}（${prices.length} 日）`:'尚無'}；配息資料：${fund==='009816'?'不分配收益（非缺漏；收益留在基金淨值）':dfile?`${dfile.events.length} 筆，截至 ${esc(dfile.asOf||'未標示')}`:'尚無'}。來源：證交所 STOCK_DAY、投信公開收益分配政策及 ETF 收益分配歷史。</p>`;
  if(fund!=='009816'&&dfile){const oldest=dfile.events[0]?.exDate||'無可核對紀錄',newest=dfile.events.at(-1)?.exDate||'無';h+=`<p class="fine"><strong>${fund} 歷年現金配息：</strong>目前收錄 ${dfile.events.length} 筆；最早除息 ${esc(oldest)}，最近除息 ${esc(newest)}。資料會從官方可取得的最早紀錄向後累積；「最早一筆」不等於上市至今已全部核對。<a href="${esc(dfile.sourceUrl||'https://www.twse.com.tw/rwd/zh/ETF/etfDiv')}" target="_blank" rel="noopener noreferrer">核對資料來源</a>。</p>`;}
  if(fund==='009816')h+='<p class="fine"><strong>009816 不分配收益：</strong>「含息總報酬」和「配息再投入」模式不會虛構配息交易，計算結果在其他條件相同時等同純價格報酬；這不等於底層股票未產生股利，相關收益留在基金資產內。</p>';
  if(fund==='006208'){const c=coverageCache['006208'];if(c?.error)h+=`<p class="fine">006208 回補狀態：${esc(c.error)}。請確認後台已產生並公開 data/index-etf/prices/006208.coverage.json。</p>`;else if(c&&Number.isFinite(Number(c.rows)))h+=`<p class="fine">006208 後台回補：${Number(c.rows)} 筆價格、${Number(c.monthsWithPrices??0)}/${Number(c.targetMonths??0)} 個月份；缺漏 ${Number(c.missingMonthCount??0)} 個月；資料範圍 ${esc(c.earliestSaved||'無')}～${esc(c.latestSaved||'無')}。若仍有缺漏，可在 Actions 重複執行補抓。</p>`;}
  if(errors[fund+'_price'])h+=`<p class="alert">${esc(errors[fund+'_price'])}</p>`;
  if(errors[fund+'_div'])h+=`<p class="alert">${esc(errors[fund+'_div'])}</p>`;
+ if(fund!=='009816'&&dfile&&dfile.events.length===0)h+='<p class="alert">目前官方配息檔案沒有可用配息事件；不能因此推定歷史期間均未配息，請核對來源與資料格式。</p>'; 
  if(dfile?.sourceStatus==='local-only')h+='<p class="alert">目前僅使用本機匯入的配息紀錄；歷史股息可能不完整，含息結果僅供參考，不能視為全期真實總報酬。</p>';
  if(blocked)h+='<p class="alert">配息資料尚無法驗證：以下先顯示可確認的「純價格報酬」，不是含息總報酬。可由後台發布官方配息 JSON，或匯入已核對的配息 CSV 後重算。不能將缺漏股息視為零。</p>';
  if(blocked)mode='price';
  if(calc&&cur){h+=`<div class="grid stats" style="margin-top:12px">${metric('額外投入成本',num(cur.externalPaid,2))}${metric('分割／再投入後股數',num(cur.shares,4))}${metric('平均帳面持股成本',cur.shares?num(cur.bookCost/cur.shares,4):'—')}${metric('最近收盤價',num(cur.close,2))}${metric('目前持股市值',num(cur.value))}${metric('價格損益',num(cur.pricePnl))}${metric('累積應得配息',mode==='price'?'未計入':num(calc.dividendGross,2))}${metric('現金＋待發配息',mode==='price'?'未計入':num(calc.dividendCash+calc.receivable,2))}${metric('總收益／總損益',sgn(cur.totalPnl,2))}${metric('含息總報酬率',mode==='price'?'未含配息：'+sgn(cur.pct,2)+'%':sgn(cur.pct,2)+'%')}${metric('投入本金累計',num(cur.externalPaid,2))}${metric('股價價差貢獻',sgn(cur.pricePnl,2))}${metric('配息收益貢獻',mode==='price'?'未計入':sgn(calc.dividendGross,2))}${metric('已用股息再投入',mode==='reinvest'?num(calc.reinvestPaid,2):'0.00')}${metric('期間最高損益',sgn(calc.best?.pnl))}${metric('期間最低損益',sgn(calc.worst?.pnl))}${metric('最高報酬率',sgn(calc.bestRate?.pct,2)+'%')}${metric('最低報酬率',sgn(calc.worstRate?.pct,2)+'%')}${metric('年化資金加權報酬 XIRR',calc.xirr===null?'資料不足':sgn(calc.xirr,2)+'%')}</div>`;
  h+=`<p class="fine"><strong>總收益核對：</strong>${mode==='price'?'價格模式＝最新持股市值－實際已買入成本；不包含股息。':'含息模式＝持股市值＋尚餘股息現金＋應收股息－實際已買入成本；若再投入則股息已轉成持股，不重複列為現金收益。'} 股價價差＋累積應得股息－股息再投入金額＝總收益（不含稅費差異；買入手續費已按設定納入）。</p>`;
  h+=`<p class="fine">最高損益 ${calc.best?.date||'—'}；最低損益 ${calc.worst?.date||'—'}。尚未投入的預算餘額：${num(calc.unused,2)} 元，未計入投入成本。股利再投入金額：${num(calc.reinvestPaid,2)} 元（不是新增本金）。</p>`;
- h+=chart(calc.series);
+ h+=chart(calc.series,fund);
  h+=`<div class="table-wrap"><table class="data-table"><thead><tr><th>事件類型</th><th>預定日期</th><th>模擬日期</th><th class="num">每股價格</th><th class="num">股數增加</th><th class="num">成本／再投入（元）</th></tr></thead><tbody>${calc.events.map(e=>`<tr><td>${e.kind==='purchase'?(e.source==='dca'?'定期定額':'投入／加碼'):e.kind==='split'?'分割增加股數':'股息再投入'}</td><td>${esc(e.requestedDate||e.date)}</td><td>${esc(e.date)}</td><td class="num">${num(e.price,2)}</td><td class="num">${num(e.shares,4)}</td><td class="num">${num(e.paid,2)}</td></tr>`).join('')}</tbody></table></div>`;
  if(mode!=='price'&&calc.divEvents.length)h+=`<details><summary>查看期間配息事件（${calc.divEvents.length} 筆）</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>事件</th><th>日期</th><th class="num">應得／入帳金額</th></tr></thead><tbody>${calc.divEvents.map(e=>`<tr><td>${e.kind==='ex'?'除息應得':'配息入帳'}</td><td>${esc(e.date)}</td><td class="num">${num(e.amount,2)}</td></tr>`).join('')}</tbody></table></div></details>`;
  if(fund!=='009816'&&dfile?.events?.length){h+=`<details><summary>查看 ${fund} 已收錄歷年配息（${dfile.events.length} 筆；依資料來源）</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>除息日</th><th>發放日</th><th class="num">每股配息（元）</th></tr></thead><tbody>${dfile.events.map(d=>`<tr><td>${esc(d.exDate)}</td><td>${esc(d.paymentDate)}</td><td class="num">${num(d.amount,4)}</td></tr>`).join('')}</tbody></table></div><p class="fine">本表列出基金每股配息事件，並非你的實領配息；實領金額依每次除息前持股計算。缺漏的早期紀錄不會被當成零。</p></details>`;}
@@ -208,6 +236,7 @@ document.addEventListener('click',e=>{if(!window.TradeCompassBridge?.isPage?.('i
   const fund=activeFund,f=document.getElementById('idxDivCsvFile')?.files?.[0];if(!f){alert('請先選擇經核對的配息 CSV');return;}
   f.text().then(txt=>{const fresh=parseLocalDividendCsv(txt,fund);const prev=new Map((localDividends[fund]||[]).map(v=>[v.exDate,v]));fresh.forEach(v=>prev.set(v.exDate,v));localDividends[fund]=[...prev.values()].sort((a,b)=>a.exDate.localeCompare(b.exDate));localStorage.setItem(DIV_KEY,JSON.stringify(localDividends));refresh();alert('已補入 '+fresh.length+' 筆本機配息資料，請確認涵蓋期間完整');}).catch(err=>alert('配息匯入失敗：'+err.message));return;
  }
+ if(b.id==='idxDivReload'){delete dividendsCache[activeFund];delete errors[activeFund+'_div'];load(activeFund);return;}
  if(b.id==='idxDivCsvClear'){if(confirm('清除本 ETF 本機配息紀錄？公開官方資料不會刪除。')){delete localDividends[activeFund];localStorage.setItem(DIV_KEY,JSON.stringify(localDividends));refresh();}return;}
 
  if(b.id==='idxReturnAdd'){const date=document.getElementById('idxReturnDate')?.value,amount=Number(document.getElementById('idxReturnAmount')?.value);if(!dateValid(date)||!(amount>0)){alert('請輸入有效日期與投入金額');return;}updateLots(activeFund,[...lots(activeFund),{date,amount}]);}
@@ -216,5 +245,5 @@ document.addEventListener('click',e=>{if(!window.TradeCompassBridge?.isPage?.('i
 });
 document.addEventListener('change',e=>{if(e.target?.id==='idxReturnFee'){const x=Number(e.target.value);if(Number.isFinite(x)&&x>=0&&x<=5){store[activeFund+'_fee']=x;persist();refresh();}}
  if(e.target?.id==='idxReturnMode'){store[activeFund+'_mode']=e.target.value;persist();refresh();}});
-window.TradeCompassETFReturns={html,load,_test:{compute,xirr,parsePrices,parseDividends,monthSchedule,parseLocalCsv,parseLocalDividendCsv,mergeLocalPrices,missingMonths,effectiveDividends}};
+window.TradeCompassETFReturns={html,load,_test:{compute,xirr,parsePrices,parseDividends,monthSchedule,parseLocalCsv,parseLocalDividendCsv,mergeLocalPrices,missingMonths,effectiveDividends,chart,chartPanel}};
 })();
