@@ -87,6 +87,16 @@ function importCsv(text){const rows=csvParse(text);if(rows.length<2)throw Error(
  (state.local.snapshots[etf]??={})[date]=snap;count++;}
  localStorage.setItem(KEY,JSON.stringify(state.local));state.message=`已將 ${count} 個日期的持股明細存入本機（未經官方自動核對）。`;loadFund();}
 function render(){
+  /* TC_RETURNS_ONLY_DIRECT_V2 */
+  if (!state.initialized) state.initialized = true;
+  const selectedFund = ['0050','006208','009816'].includes(state.fund) ? state.fund : '0050';
+  const selectOptions = Object.entries(FUNDS).map(([code,name]) =>
+    `<option value="${code}"${selectedFund===code?' selected':''}>${code} ${esc(name)}</option>`).join('');
+  const widget = window.TradeCompassETFReturns?.html?.(selectedFund);
+  const content = widget ? widget.replace(/<h2\b[^>]*class="panel-title"[^>]*>\s*指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）\s*<\/h2>/, '')
+    : '<section class="panel" style="padding:22px"><p class="alert">報酬試算尚未載入。請確認 index_etf_returns.js 已發布。</p></section>';
+  return `<div class="head"><div><div class="eyebrow">INDEX ETF INVESTMENT RETURNS</div><h1>指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）</h1><p class="subtitle">0050、006208、009816：歷史股價、投入、配息、分割、定期定額與總收益試算。</p></div></div><section class="panel" style="padding:20px 23px"><div class="filter-row"><label for="indexFund">指數型 ETF</label><select id="indexFund" class="field">${selectOptions}</select></div></section>` + content;
+
   /* TC_INDEX_RETURNS_ONLY_V1 */
   if (!state.initialized) state.initialized = true;
   const fundOptions = Object.entries(FUNDS).map(([code,name]) =>
