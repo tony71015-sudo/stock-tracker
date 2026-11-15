@@ -1,38 +1,43 @@
-# Trade Compass v1.6.5 — Official ETF historical prices automatic backfill
+# Trade Compass v1.6.6 — 006208 歷史覆蓋檢查與 009816 不配息修正
 
-## Purpose
+## 為什麼要修正
 
-This update replaces the existing `update-index-etf-prices.yml` workflow and price script. It retains the v1.6.4 frontend `index_etf_returns.js` and the exact `rows` schema consumed by that frontend. It does not change active ETF holdings, three-institution flows, index ETF portfolio constituents, or website layout.
+- 006208 **已經**存在於 v1.6.5 的 `LISTED` 名單（上市日 `2012-07-17`），不是原本被遺漏。但目前無法從本更新包證實使用者 GitHub 的 006208 歷史 JSON 是否完整，也無法排除 GitHub Pages 的發布資料缺漏。本版不虛構歷史收盤價。
+- 006208 官網政策是**每年兩次收益分配**，應保留配息查詢及資料缺漏警示。
+- 009816 凱基台灣 TOP50 官方明確公告「收益分配：不分配」。故現金配息事件清單為空是正常設計，**不等於 API 失敗**；基金內部收益反映在淨值／市場價格，不產生投資人的配息再投入交易。
 
-### Official data availability
+## 你目前只需要上傳 4 個檔案
 
-| Ticker | Listed | TWSE STOCK_DAY supported query start |
-|---|---|---|
-| 0050 | 2003-06-30 | 2010-01-04 (2003–2009 not returned by this endpoint) |
-| 006208 | 2012-07-17 | Listing date |
-| 009816 | 2026-02-03 | Listing date |
+1. `scripts/update_index_etf_prices.py`：**覆蓋**原檔；優先處理 006208 的上市日至今歷史月資料，新增每檔覆蓋報告。沒有任何股價時仍產生 `006208.coverage.json` 讓你能看見失敗原因。
+2. `scripts/update_index_etf_dividends.py`：**覆蓋**原檔；009816 不向配息 API 強求不存在的配息，改寫出含政策註明的 `events: []`，0050/006208 仍照原官方歷史擷取流程。
+3. `.github/workflows/update-index-etf-prices.yml`：**覆蓋**原檔；先抓 006208（一般執行每次最多補 42 個缺漏月份），再處理 0050、009816。保留既有安全發布程式 `scripts/publish_index_etf_prices.py`，本 ZIP **不覆蓋**該檔。工作流程本身不修改其他 workflow。
+4. `index_etf_returns.js`：**覆蓋**原檔；保留 v1.6.4 定期定額、加碼、分割、手動補價與 XIRR 計算。009816 含息模式不再因缺少配息 JSON 失效，006208 顯示後台資料覆蓋率。
 
-**Critical:** This does NOT automatically reconstruct 0050 2003–2009. Those years require another traceable official source. The tool does not invent prices or use forward filling. Daily prices are original, unadjusted closing prices; dividends and splits are applied by the return calculation module, not pre-adjusted here.
+> 如你在 v1.6.4 之後曾自行用 Codex 修改 `index_etf_returns.js`，請先在 GitHub 比較差異，不要直接覆蓋更新版本。
 
-## Files to upload (maintain same GitHub paths)
+## 安裝 / 執行
 
-1. `scripts/update_index_etf_prices.py` — overwrite
-2. `scripts/update_index_etf_dividends.py` — overwrite or retain if identical (included for a complete package)
-3. `scripts/publish_index_etf_prices.py` — new
-4. `.github/workflows/update-index-etf-prices.yml` — overwrite
+在 GitHub 將四檔依照相對路徑上傳並 Commit 至 main，前往 Actions 執行 `更新指數型 ETF 官方歷史股價（自動補缺）`，建議 `full=false`，多跑數次直至 006208 缺漏月數下降。`full=true` 會嘗試重取全歷史資料，耗時且可能碰到官方節流。
 
-Do NOT upload `__pycache__`. Do NOT run the workflow that modifies workflow YAML files; edit/upload workflow directly from the GitHub UI and commit.
+**驗證 GitHub repo**：
 
-## How to run
+- `data/index-etf/prices/006208.json`：`rows` 是否有 2012 年後的有效日期。
+- `data/index-etf/prices/006208.coverage.json`：`rows`、`earliestSaved`、`latestSaved`、`missingMonthCount`、`failedRequests`。
+- `data/index-etf/dividends/009816.json`：`distributionPolicy: none`、`events: []`（合法的零配息政策）。
 
-In GitHub Actions choose **更新指數型 ETF 官方歷史股價（自動補缺）** and **Run workflow**. Start with `full=false` so that each run attempts 18 missing months for each ETF and refreshes recent months. It is safe to run repeatedly; historical JSON is merged by date. If you want all available months at once, use `full=true` (large number of requests; API may throttle, and partial download is possible). Weekday scheduled runs continue filling gaps automatically.
+**驗證 GitHub Pages**：
 
-Inspect `data/index-etf/prices/0050.json`, `006208.json`, `009816.json`, and companion `*.coverage.json` for latest saved date, data ranges and warnings.
+- `https://tony71015-sudo.github.io/stock-tracker/data/index-etf/prices/006208.json`
+- `https://tony71015-sudo.github.io/stock-tracker/data/index-etf/prices/006208.coverage.json`
+- `https://tony71015-sudo.github.io/stock-tracker/index_etf_returns.js`
 
-### Website deployment
+若 repo 有資料但 Pages 是 404 或仍是舊資料，問題在網站**發布流程**：需確保 `_site/` 複製 `index_etf_returns.js`、`data/index-etf/prices/`、`data/index-etf/dividends/`。本補丁為降低風險，**沒有**再次自動修改三大法人或 GitHub Pages 發布的 workflow。
 
-Updating repository data is different from updating the GitHub Pages artifact. Your *existing* publication workflow must include `data/index-etf/prices/` and `data/index-etf/dividends/` in `_site/data/index-etf/`. This patch deliberately does not change publishing workflows because earlier automation edits caused GitHub permissions and Git merge failures. Verify the real published file URL, e.g. `https://tony71015-sudo.github.io/stock-tracker/data/index-etf/prices/0050.json`. If that returns 404 or remains stale, repair the existing Pages publishing workflow separately.
+## 使用風險
 
-### Safety and interpretation
+歷史價格是未還原收盤價；ETF 分割及配息需由回測模組分開處理。006208 的缺漏月份報告只表示某個月份是否至少有一筆股價，**不是每日完整度保證**。缺值不會以前一日行情補造。009816 無現金配息不等於沒有底層股利收入，也不等於網站能準確預測報酬。ETF 基金政策若未來改變須更新本規則。投資前需與官方資訊交叉核對。
 
-Official prices can be missing because of market holidays, suspensions, API unavailability or pre-2010 limitations. The data are **unadjusted** close prices. Corporate action split effects must be handled by return simulation; dividend history is a separate dataset. No price interpolation, no invented records. Financial values are for research and need validation against brokerage and issuer records.
+資料來源：
+- 凱基 009816 官方基金資料：https://www.kgifund.com.tw/Fund/Detail?fundID=J023
+- 富邦 006208 官方基金資料：https://websys.fsit.com.tw/FubonETF/Fund/Profile.aspx?stkId=006208
+- 證交所個股日成交資訊：https://accessibility.twse.com.tw/zh/trading/historical/stock-day.html

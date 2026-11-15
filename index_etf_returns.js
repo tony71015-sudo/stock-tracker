@@ -1,11 +1,11 @@
-/* Trade Compass v1.6.4 | monthly DCA, local historical CSV gap fill, split/dividends and investment simulation. */
+/* Trade Compass v1.6.6 | 006208 historical coverage diagnostics and 009816 no-distribution policy. */
 (function(){'use strict';
 const ETF=['0050','006208','009816'];
 const KEY='trade-compass-index-etf-investments-v161'; // preserve existing investment data
 const PRICE_KEY='trade-compass-index-etf-local-prices-v164'; // local historical backfill, never published automatically
 const SPLITS={'0050':[{'date':'2025-06-18','ratio':4}]};
 let store={};try{store=JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch{}
-const pricesCache={},dividendsCache={},errors={},pending={};let activeFund='0050';
+const pricesCache={},dividendsCache={},coverageCache={},errors={},pending={};let activeFund='0050';
 let localPrices={};try{localPrices=JSON.parse(localStorage.getItem(PRICE_KEY)||'{}')||{};}catch{}
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num=(v,d=0)=>Number.isFinite(v)?v.toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';
@@ -77,7 +77,9 @@ function missingMonths(prices,code){
 function parseDividends(payload,code){if(payload?.etf!==code||!Array.isArray(payload.events))throw Error('配息檔案格式錯誤');const seen=new Set(),out=[];for(const e of payload.events){if(!dateValid(e.exDate)||!dateValid(e.paymentDate)||e.paymentDate<e.exDate||!(Number(e.amount)>0)||seen.has(e.exDate))continue;seen.add(e.exDate);out.push({exDate:e.exDate,paymentDate:e.paymentDate,amount:Number(e.amount)});}return out.sort((a,b)=>a.exDate.localeCompare(b.exDate));}
 async function load(code){if(!ETF.includes(code)||pending[code])return;pending[code]=true;try{
  if(!pricesCache[code]){const r=await fetch('data/index-etf/prices/'+code+'.json?ts='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('股價 HTTP '+r.status);pricesCache[code]=parsePrices(await r.json(),code);}
- try{const r=await fetch('data/index-etf/dividends/'+code+'.json?ts='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const raw=await r.json();dividendsCache[code]={events:parseDividends(raw,code),coverageStart:raw.coverageStart||null,asOf:raw.asOf||null};delete errors[code+'_div'];}
+ if(code==='006208'&&!coverageCache[code]){try{const r=await fetch('data/index-etf/prices/006208.coverage.json?ts='+Date.now(),{cache:'no-store'});coverageCache[code]=r.ok?await r.json():{error:'網站未發布 006208.coverage.json（HTTP '+r.status+'）'};}catch(e){coverageCache[code]={error:'回補統計讀取失敗：'+e.message};}}
+ if(code==='009816'){dividendsCache[code]={events:[],coverageStart:'2026-02-03',asOf:null,distributionPolicy:'none'};delete errors[code+'_div'];}
+ else try{const r=await fetch('data/index-etf/dividends/'+code+'.json?ts='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);const raw=await r.json();dividendsCache[code]={events:parseDividends(raw,code),coverageStart:raw.coverageStart||null,asOf:raw.asOf||null};delete errors[code+'_div'];}
  catch(e){errors[code+'_div']='尚無完整官方配息檔案（'+e.message+'），含息績效暫停顯示';}
  delete errors[code+'_price'];}catch(e){errors[code+'_price']='收盤價載入失敗：'+e.message;}finally{delete pending[code];refresh();}}
 function nextDateAfter(date,prices){return prices.find(p=>p.date>date)?.date||null;}
@@ -141,7 +143,9 @@ function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pendi
  <p class="fine">CSV 格式：date,close（或 etf,date,close）；例如 2008-10-01,35.5。請只匯入已核對的<strong>原始未還原收盤價</strong>。官方歷史價格優先，手動資料只補缺漏日，不覆蓋官方值。匯入不會上傳 GitHub。</p>
  <div class="filter-row"><input id="idxLocalCsvFile" type="file" accept=".csv,text/csv" class="field"/><button id="idxLocalCsvImport" class="btn">匯入 CSV</button><button id="idxLocalCsvClear" class="btn danger">清除本機補價</button></div>
  <p class="fine">已匯入 ${Number((localPrices[fund]||[]).length)} 筆本機價格。缺少月份（從上市日起算）：${gaps.length} 個${gaps.length?'；例如 '+esc(gaps.slice(0,8).join('、')):''}。官方回補請使用既有「更新指數型 ETF 每日收盤價」工作流程，執行 backfill，不要拿價格缺漏當作零。</p></details>
- <p class="fine">價格資料：${prices.length?`${prices[0].date}～${prices.at(-1).date}（${prices.length} 日）`:'尚無'}；配息資料：${dfile?`${dfile.events.length} 筆，截至 ${esc(dfile.asOf||'未標示')}`:'尚無'}。來源：證交所 STOCK_DAY、ETF 收益分配歷史。</p>`;
+ <p class="fine">價格資料：${prices.length?`${prices[0].date}～${prices.at(-1).date}（${prices.length} 日）`:'尚無'}；配息資料：${fund==='009816'?'不分配收益（非缺漏；收益留在基金淨值）':dfile?`${dfile.events.length} 筆，截至 ${esc(dfile.asOf||'未標示')}`:'尚無'}。來源：證交所 STOCK_DAY、投信公開收益分配政策及 ETF 收益分配歷史。</p>`;
+ if(fund==='009816')h+='<p class="fine"><strong>009816 不分配收益：</strong>「含息總報酬」和「配息再投入」模式不會虛構配息交易，計算結果在其他條件相同時等同純價格報酬；這不等於底層股票未產生股利，相關收益留在基金資產內。</p>';
+ if(fund==='006208'){const c=coverageCache['006208'];if(c?.error)h+=`<p class="fine">006208 回補狀態：${esc(c.error)}。請確認後台已產生並公開 data/index-etf/prices/006208.coverage.json。</p>`;else if(c&&Number.isFinite(Number(c.rows)))h+=`<p class="fine">006208 後台回補：${Number(c.rows)} 筆價格、${Number(c.monthsWithPrices??0)}/${Number(c.targetMonths??0)} 個月份；缺漏 ${Number(c.missingMonthCount??0)} 個月；資料範圍 ${esc(c.earliestSaved||'無')}～${esc(c.latestSaved||'無')}。若仍有缺漏，可在 Actions 重複執行補抓。</p>`;}
  if(errors[fund+'_price'])h+=`<p class="alert">${esc(errors[fund+'_price'])}</p>`;
  if(errors[fund+'_div'])h+=`<p class="alert">${esc(errors[fund+'_div'])}</p>`;
  if(blocked)h+='<p class="alert">配息歷史缺漏：已停用含息績效，不使用 0 元配息假裝完整。可先切回「純價格報酬」。</p>';
