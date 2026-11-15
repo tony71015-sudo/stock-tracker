@@ -1,75 +1,87 @@
-name: 更新指數型ETF實際持股（官方來源實驗版）
+name: 更新指數型ETF持股（來源診斷與安全累積版）
 on:
   workflow_dispatch:
+    inputs:
+      allow_third_party:
+        description: '使用明確標示的 MoneyDJ 全部持股備援（非官方）'
+        type: boolean
+        default: true
+      backfill_days:
+        description: '006208 嘗試查詢最近幾個交易日（1-12）'
+        default: '4'
   schedule:
-    - cron: '40 11 * * 1-5' # Taiwan 19:40 on trading weekdays
+    - cron: '40 11 * * 1-5'  # 台灣時間 19:40
 permissions:
   contents: write
 concurrency:
-  group: index-etf-holdings-official
+  group: index-etf-holdings-v2
   cancel-in-progress: false
 jobs:
   capture:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install parser dependencies
-        run: pip install requests beautifulsoup4
-      - name: Fetch issuer actual holdings separately (failure is visible)
+      - name: Install HTML parsing dependencies
+        run: python -m pip install requests beautifulsoup4
+      - name: Fetch issuer holdings, log each result and keep failures visible
         shell: bash
+        env:
+          DISPATCH_THIRD_PARTY: ${{ inputs.allow_third_party }}
+          DISPATCH_DAYS: ${{ inputs.backfill_days }}
         run: |
-          success=0
+          set -uo pipefail
+          flags=()
+          if [ "${DISPATCH_THIRD_PARTY:-true}" != 'false' ]; then flags+=(--allow-third-party); fi
+          days="${DISPATCH_DAYS:-4}"
           for code in 0050 006208 009816; do
-            echo "::group::$code"
-            if python scripts/update_index_etf_holdings.py --code "$code"; then
-              success=$((success+1))
-            else
-              echo "::warning::$code official holdings unavailable; no synthetic snapshot stored"
-            fi
+            echo "::group::${code} holdings"
+            python scripts/update_index_etf_holdings.py --code "$code" --backfill-days "$days" "${flags[@]}" || echo "::warning::${code} parser/runtime error; see above"
             echo '::endgroup::'
           done
-          echo "Valid issuer snapshots parsed: $success / 3"
-          if [ "$success" -eq 0 ]; then
-            echo '::error::None of the issuer sites yielded a validated full portfolio'
-            exit 1
-          fi
-      - name: Commit only actual portfolio snapshots safely
+      - name: Preserve captures and publish without git rebase
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/index-etf-capture
-          cp -a data/index-etf/history /tmp/index-etf-capture/ 2>/dev/null || true
-          git fetch origin main
-          git reset --hard origin/main
-          mkdir -p data/index-etf/history
-          if [ -d /tmp/index-etf-capture/history ]; then
-            cp -an /tmp/index-etf-capture/history/. data/index-etf/history/
-          fi
-          # Only valid saved daily snapshots are indexed.
-          python - <<'PY'
-          import json, pathlib, re
-          root=pathlib.Path('data/index-etf')
-          for code in ('0050','006208','009816'):
-              folder=root/'history'/code
-              dates=[]
-              for p in folder.glob('????-??-??.json'):
-                  if not re.fullmatch(r'\d{4}-\d{2}-\d{2}',p.stem): continue
-                  try: s=json.loads(p.read_text(encoding='utf-8'))
-                  except Exception: continue
-                  if s.get('etf')==code and s.get('date')==p.stem and s.get('kind')=='actual_portfolio' and s.get('verified') is True and len(s.get('holdings',[]))>=40: dates.append(p.stem)
-              index=root/'indexes'/f'{code}.json'
-              index.parent.mkdir(parents=True,exist_ok=True)
-              data={'schema':1,'etf':code,'dates':sorted(dates,reverse=True),'dataKind':'actual_portfolio', 'status':'comparable' if len(dates)>=2 else 'single_day' if dates else 'unavailable'}
-              index.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-          PY
+          mkdir -p /tmp/tc-index-etf-data
+          cp -a data/index-etf/history /tmp/tc-index-etf-data/ 2>/dev/null || true
+          cp -a data/index-etf/capture-status /tmp/tc-index-etf-data/ 2>/dev/null || true
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/index-etf/history data/index-etf/indexes
-          if git diff --cached --quiet; then echo 'Nothing to commit'; exit 0; fi
-          git commit -m 'data: validated index ETF actual holdings snapshots'
-          git push origin HEAD:main
+          for trial in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            mkdir -p data/index-etf/history data/index-etf/capture-status
+            if [ -d /tmp/tc-index-etf-data/history ]; then cp -an /tmp/tc-index-etf-data/history/. data/index-etf/history/; fi
+            if [ -d /tmp/tc-index-etf-data/capture-status ]; then cp -a /tmp/tc-index-etf-data/capture-status/. data/index-etf/capture-status/; fi
+            python scripts/rebuild_index_etf_indexes.py
+            python scripts/patch_index_etf_validation.py
+            git add data/index-etf/history data/index-etf/indexes data/index-etf/capture-status index_etf.js
+            if git diff --cached --quiet; then
+              echo 'No new snapshots or status changes'
+              break
+            fi
+            git commit -m 'data: verify and preserve index ETF snapshots' >/dev/null
+            if git push origin HEAD:main; then
+              echo 'Successfully published verified snapshots and status'
+              break
+            fi
+            if [ "$trial" = 5 ]; then echo '::error::Unable to push after 5 safe retries'; exit 1; fi
+            echo "::warning::Remote changed; safe retry ${trial}"
+            sleep 2
+          done
+          echo '## ETF 持股匯入結果' >> "$GITHUB_STEP_SUMMARY"
+          for code in 0050 006208 009816; do
+            echo "### $code" >> "$GITHUB_STEP_SUMMARY"
+            if [ -f "data/index-etf/capture-status/$code.json" ]; then
+              python - "$code" <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json,sys
+          s=json.load(open('data/index-etf/capture-status/'+sys.argv[1]+'.json'))
+          print('結果：',s['status'],'| 新增快照：',s['newSnapshots'])
+          for err in s.get('errors',[])[:6]:print('- '+err.replace('<','&lt;'))
+          PY
+            fi
+          done
