@@ -32,12 +32,18 @@ jobs:
           FULL_BACKFILL: ${{ inputs.full || 'false' }}
         run: |
           set -euo pipefail
+          # 006208 first so its missing history receives priority even if later
+          # requests for 0050 encounter throttling or workflow time limits.
           if [ "$FULL_BACKFILL" = 'true' ]; then
-            python scripts/update_index_etf_prices.py --full --pause 0.6
+            python scripts/update_index_etf_prices.py --code 006208 --full --pause 0.6
+            python scripts/update_index_etf_prices.py --code 0050 --full --pause 0.6
+            python scripts/update_index_etf_prices.py --code 009816 --full --pause 0.6
           else
-            python scripts/update_index_etf_prices.py --max-missing-months 18 --pause 0.6
+            python scripts/update_index_etf_prices.py --code 006208 --max-missing-months 42 --pause 0.6
+            python scripts/update_index_etf_prices.py --code 0050 --max-missing-months 18 --pause 0.6
+            python scripts/update_index_etf_prices.py --code 009816 --max-missing-months 18 --pause 0.6
           fi
-      - name: Attempt official dividend updates (retain existing on failure)
+      - name: Update dividend archives (009816 explicitly non-distributing)
         run: python scripts/update_index_etf_dividends.py
       - name: Publish archives with conflict-safe date merge
         run: |
