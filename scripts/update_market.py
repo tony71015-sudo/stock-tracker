@@ -9,6 +9,8 @@ import json
 import logging
 import re
 import urllib.request
+import time
+import urllib.error
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -18,16 +20,40 @@ HEADERS={'User-Agent':'Mozilla/5.0 (compatible; TradeCompass/1.4; public data re
 SOURCES={
  'twse':'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL',
  'tpex':'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes',
+ 'tpex_alt':'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes',
  'twse_daytrade':'https://www.twse.com.tw/exchangeReport/TWTB4U?response=json&date={date}&selectType=All',
  'tpex_daytrade':'https://www.tpex.org.tw/openapi/v1/tpex_intraday_trading_statistics',
 }
 
-def fetch_json(url):
-    with urllib.request.urlopen(urllib.request.Request(url,headers=HEADERS),timeout=35) as resp:
-        if resp.status != 200: raise ValueError('HTTP '+str(resp.status))
-        blob=resp.read(5_000_000)
-        if b'<' in blob[:50]: raise ValueError('API returned HTML instead of JSON')
-        return json.loads(blob)
+def fetch_json(url, attempts=4):
+    """Retry incomplete OTC responses, never persist malformed/truncated JSON.
+
+    2026-11 observed TPEx JSONDecodeError: Unterminated string around byte 4.8M.
+    This is an invalid upstream payload, not a Python encoding fix.
+    """
+    failures=[]
+    for attempt in range(attempts):
+        try:
+            request=urllib.request.Request(
+                url, headers={**HEADERS, 'Accept-Encoding':'identity',
+                              'Cache-Control':'no-cache', 'Pragma':'no-cache'})
+            with urllib.request.urlopen(request,timeout=60) as resp:
+                if resp.status != 200:raise ValueError('HTTP '+str(resp.status))
+                blob=resp.read(30_000_001)
+                if len(blob)>30_000_000:raise ValueError('JSON exceeds 30MB safety limit')
+                expected=resp.headers.get('Content-Length')
+                if expected and expected.isdigit() and len(blob)<int(expected):
+                    raise ValueError(f'truncated HTTP body: {len(blob)}/{expected} bytes')
+                if b'<' in blob[:50]:raise ValueError('API returned HTML instead of JSON')
+                data=json.loads(blob.decode('utf-8-sig'))
+                if not isinstance(data,(dict,list)):
+                    raise ValueError('JSON root must be array or object')
+                return data
+        except (ValueError,UnicodeError,TimeoutError,OSError,urllib.error.URLError) as e:
+            failures.append(f'attempt {attempt+1}: {type(e).__name__}: {str(e)[:150]}')
+            if attempt+1<attempts:time.sleep(min(1.5*(attempt+1),5))
+    raise ValueError('official API unavailable after retry: '+' | '.join(failures))
+
 
 def num(v,integer=False):
     if v is None or isinstance(v,bool): return None
@@ -59,13 +85,19 @@ def parse_twse(items):
     output=[]
     for x in items:
         if not isinstance(x,dict):continue
-        code=str(get(x,'Code','證券代號') or '').strip()
+        code=str(get(x,'Code','證券代號') or '').strip().upper()
         date=iso(get(x,'Date','日期'))
         if not re.fullmatch('[0-9A-Z]{4,8}',code) or not date:continue
         op=num(get(x,'OpeningPrice','開盤價'));hi=num(get(x,'HighestPrice','最高價'))
         lo=num(get(x,'LowestPrice','最低價'));cl=num(get(x,'ClosingPrice','收盤價'))
         vol=num(get(x,'TradeVolume','成交股數'),True)
-        if None in (op,hi,lo,cl,vol) or lo<=0 or lo>op or op>hi or lo>cl or cl>hi or vol<0:continue
+        # Some securities have a valid official closing price while opening/high/low
+        # are absent or no intraday trades occurred. Keep a close-only observation;
+        # never fabricate missing OHLC or volume figures.
+        if cl is None or cl<=0 or (vol is not None and vol<0):continue
+        if any(v is not None and v<=0 for v in (op,hi,lo)):continue
+        if None not in (op,hi,lo) and not (lo<=op<=hi):continue
+        if None not in (lo,hi) and not (lo<=cl<=hi):continue
         output.append(dict(market='TWSE',date=date,code=code,name=str(get(x,'Name','證券名稱') or code).strip(),open=op,high=hi,low=lo,close=cl,volumeShares=vol,tradeValue=num(get(x,'TradingValue','TradingAmount','TradeValue','成交金額'),True),daytradeShares=None))
     if len(output)<100:raise ValueError('TWSE returned too few validated records')
     return output
@@ -75,13 +107,19 @@ def parse_tpex(items):
     output=[]
     for x in items:
         if not isinstance(x,dict):continue
-        code=str(get(x,'SecuritiesCompanyCode','SecuritiesCode','Code','代號','證券代號') or '').strip()
+        code=str(get(x,'SecuritiesCompanyCode','SecuritiesCode','Code','代號','證券代號') or '').strip().upper()
         date=iso(get(x,'Date','日期','資料日期'))
         if not re.fullmatch('[0-9A-Z]{4,8}',code) or not date:continue
         op=num(get(x,'OpeningPrice','Open','開盤'));hi=num(get(x,'HighestPrice','High','最高'))
         lo=num(get(x,'LowestPrice','Low','最低'));cl=num(get(x,'Close','ClosePrice','ClosingPrice','收盤'))
-        vol=num(get(x,'TradingShares','TradeVolume','TradingVolume','成交股數'),True)
-        if None in (op,hi,lo,cl,vol) or lo<=0 or lo>op or op>hi or lo>cl or cl>hi or vol<0:continue
+        vol=num(get(x,'TradingShares','TradeVolume','TradingVolume','TradeShares','成交股數'),True)
+        # Some securities have a valid official closing price while opening/high/low
+        # are absent or no intraday trades occurred. Keep a close-only observation;
+        # never fabricate missing OHLC or volume figures.
+        if cl is None or cl<=0 or (vol is not None and vol<0):continue
+        if any(v is not None and v<=0 for v in (op,hi,lo)):continue
+        if None not in (op,hi,lo) and not (lo<=op<=hi):continue
+        if None not in (lo,hi) and not (lo<=cl<=hi):continue
         output.append(dict(market='TPEX',date=date,code=code,name=str(get(x,'CompanyName','SecuritiesName','Name','名稱') or code).strip(),open=op,high=hi,low=lo,close=cl,volumeShares=vol,tradeValue=num(get(x,'TradingValue','TradingAmount','TradeValue','成交金額'),True),daytradeShares=None))
     if len(output)<100:raise ValueError('TPEx returned too few validated records (field schema may have changed)')
     return output
@@ -128,9 +166,25 @@ def update():
     items=[];dates={};warnings=[];status={}
     for m,parser in [('TWSE',parse_twse),('TPEX',parse_tpex)]:
         try:
-            records=parser(fetch_json(SOURCES[m.lower()]))
+            try:
+                records=parser(fetch_json(SOURCES[m.lower()]))
+            except Exception as first_error:
+                if m!='TPEX':raise
+                # Official TPEx secondary endpoint; accept only if parser validates
+                # the same schema/row count. Never substitute another report kind.
+                try:
+                    records=parser(fetch_json(SOURCES['tpex_alt'],attempts=2))
+                    warnings.append('TPEX primary API unavailable; official alternative used: '+str(first_error)[:160])
+                except Exception as second_error:
+                    raise ValueError('primary: '+str(first_error)[:220]+'; secondary: '+str(second_error)[:220])
             d=choose_date(records)
             records=[x for x in records if x['date']==d]
+            records=list({r['code']:r for r in records}.values())
+            # A sudden loss of most symbols often means the official schema changed.
+            # Do not replace a previously complete quote universe with partial data.
+            previous_count=len(old_items[m])
+            if previous_count>=100 and len(records)<previous_count*0.65:
+                raise ValueError(f'Incomplete {m} universe: {len(records)} vs previous {previous_count}; old snapshot retained')
             if d>dt.date.today().isoformat():raise ValueError('Unexpected future date: '+d)
             # Prevent backward rollback if an official API is delayed.
             prev=old.get('markets',{}).get(m,{}).get('date')
@@ -145,7 +199,7 @@ def update():
                 daytrade=parse_daytrade(fetch_json(url))
                 for x in records:
                     amt=daytrade.get(x['code'])
-                    if amt is not None and 0<=amt<=x['volumeShares']:
+                    if amt is not None and x['volumeShares'] is not None and 0<=amt<=x['volumeShares']:
                         x['daytradeShares']=amt
                 if not daytrade:warnings.append(m+': official day-trading volume columns not validated; displaying N/A')
             except Exception as e:warnings.append(m+': day-trading API unavailable ('+str(e)[:100]+')')
@@ -156,8 +210,12 @@ def update():
             status[m]=old.get('markets',{}).get(m,{'date':None,'count':0,'source':SOURCES[m.lower()]})
     obj={'schema':1,'generatedAt':dt.datetime.now(dt.timezone.utc).isoformat(),'markets':status,'items':items,'warnings':warnings,'sources':SOURCES}
     DEST.parent.mkdir(parents=True,exist_ok=True)
-    DEST.write_text(json.dumps(obj,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf8')
-    print('Market snapshot:',len(items),'rows','TWSE',status['TWSE']['date'],'TPEX',status['TPEX']['date'])
+    # Atomic replace prevents interrupted GitHub runner writes from publishing half a JSON string.
+    tmp=DEST.with_suffix('.json.tmp')
+    tmp.write_text(json.dumps(obj,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf8')
+    with tmp.open('rb') as handle:json.load(handle)
+    tmp.replace(DEST)
+    print('Market snapshot:',len(items),'rows','TWSE',status['TWSE'].get('date'), 'count',status['TWSE'].get('count'), 'TPEX',status['TPEX'].get('date'), 'count',status['TPEX'].get('count'))
     for w in warnings:print('WARNING',w)
     return bool(items)
 
