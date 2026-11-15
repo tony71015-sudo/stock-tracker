@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "etf": "006208",
+  "listingDate": "2012-07-17",
+  "coverageStart": "2012-07-17",
+  "asOf": "2026-11-15",
+  "source": "Fubon Asset Management official dividend disclosures",
+  "sourceUrl": "https://www.fubon.com/asset-management/fund/dividends/by_yield?Fd=0&contact=1&toDate=2025",
+  "verificationStatus": "verified-events-partial-history",
+  "completeHistory": false,
+  "warning": "僅列已核對的歷史事件；未收錄的年度不等於零配息。前台須另確認 GitHub Pages 已發布本檔案。",
+  "events": [
+    {"exDate":"2023-07-18","paymentDate":"2023-08-11","amount":1.352,"source":"Fubon issuer"},
+    {"exDate":"2023-11-16","paymentDate":"2023-12-12","amount":0.861,"source":"Fubon issuer"},
+    {"exDate":"2024-07-16","paymentDate":"2024-08-09","amount":0.783,"source":"Fubon issuer"},
+    {"exDate":"2024-11-18","paymentDate":"2024-12-12","amount":0.9,"source":"Fubon issuer"},
+    {"exDate":"2025-07-16","paymentDate":"2025-08-08","amount":0.989,"source":"Fubon issuer"},
+    {"exDate":"2025-11-18","paymentDate":"2025-12-11","amount":3.448,"source":"Fubon issuer"},
+    {"exDate":"2026-07-16","paymentDate":"2026-08-10","amount":4.75,"source":"Fubon issuer"}
+  ]
+}
