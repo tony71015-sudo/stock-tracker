@@ -1,23 +1,25 @@
-# Trade Compass v1.7.2：指數型 ETF 累積與股票行情查詢修正
+# Trade Compass v1.7.3 — 行情資料修復（最小補丁）
 
-## 修改範圍（局部補丁）
+## 根本原因
+- 使用者輸入 `6070`；**力積電正確股票代號為 `6770`**，台達電為 `2308`。
+- GitHub Actions 上櫃行情回應曾出現 `Unterminated string...`，即 TPEx 官方 API 回傳不完整 JSON（不是查詢框造成）。截圖顯示上市 1,377 筆、上櫃 0 筆。
 
-- `scripts/update_market.py`：強化上市/上櫃欄位相容、代號去重、全市場數量檢查；官方來源資料不足時保留舊快照並列出警告。仍是**盤後行情**，不是即時報價。
-- `market.js`：修正股票名稱搜尋、股票代號與 `.TW` / `.TWO` 後綴；顯示公開資料的實際有效總筆數與日期。當日無交易且缺少有效價格的證券不會捏造收盤價。
-- `scripts/update_index_etf_holdings.py`：保留既有來源，對 0050、006208、009816 每日累積已驗證快照，增加已存歷史日數、缺少日數與日期清單的後台診斷。**不會**虛構 0050、009816 的過往 11 天持股。
+## 更新方式（不修改 YAML）
+1. 將 `market.js` 覆蓋儲存庫根目錄的 `market.js`。
+2. 將 `scripts/update_market.py` 覆蓋 `scripts/update_market.py`。
+3. `tests/test_market_repair_v173.py` 可選擇放入原有的 `tests/` 目錄，**不要**上傳 `__pycache__`、`.pyc`、虛擬環境檔。
+4. Commit changes 至 main。
+5. 從 GitHub Actions 啟動 **全新的**「更新三大法人、股票行情並發布網站」流程，不要 Re-run jobs。確認 `Deploy GitHub Pages` 成功，且 `data/market/latest.json` 中 `markets.TPEX.count` 不再是 0。
+6. 以 `6770`、`2308`、`5483`、`2330` 測試；`6070` 應顯示正確代號提示。
 
-## 直接上傳 GitHub
+## 更新內容
+- 對 TWSE / TPEx JSON 實作最多 4 次重新取得、讀取長度檢查、完整 JSON 解析驗證；避免 API 不完整回應使市場資料更新失敗。
+- TPEx 主入口失敗後嘗試官方另一個資料入口，但**仍需通過相同表格解析和最低筆數驗證**，不同資料格式不會被硬塞進系統。
+- 若兩者失敗，維持先前已確認的上櫃快照；不編造資料。
+- 以暫存檔原子替換 JSON，避免意外中斷造成不完整檔。
+- 搜尋不存在代號 6070 時提供力積電 6770 的查詢建議；可直接輸入台達電/2308。
 
-1. 備份目前同名檔案，確認期間沒有 Codex 對其另做修改。
-2. 覆蓋 `scripts/update_market.py`、`market.js`、`scripts/update_index_etf_holdings.py` 三個檔案，提交到 `main`。
-3. 使用現有的「更新三大法人、股票行情並發布網站」工作流程，確認 `data/market/latest.json` 的 `markets.TWSE.count` 和 `markets.TPEX.count`，且 `warnings` 不含解析失敗。**不要跑 bootstrap**。
-4. 使用現有的「更新指數型 ETF 持股」工作流程，於 `data/index-etf/capture-status/` 核對 `historicalDatesSaved`、`remainingTo12`；使用既有的日期索引重建工作流程。
-5. 確保 Pages 仍發布 `market.js` 和 `data/market/latest.json`；若發布版本舊，應從現有的正常網站部署流程同步。
-
-## 注意
-
-- 網站目前已確認 006208 有 12 日、0050/009816 各約 1 日；本修正不動也不刪既有日期。
-- 無法從官方或可驗證來源查到某個過去日期，就不會將 11/13 快照複製到那天。只有來源實際提供指定歷史日期才能回補。
-- 若當日行情抓到的證券數量仍偏少，請查看 `data/market/latest.json` 的 `warnings`、`markets`，很可能是上游欄位變更或資料發布滯後；不要把缺值當成 0。
-- 不修改任何既有 GitHub Actions YAML、三大法人籌碼程式、主動式 ETF、投資報酬試算或私人持股。
-- 這份補丁是依先前可取得的 v1.5.0 與指數 ETF v2 原始程式製作；若 GitHub 上目前版本已有額外修改，請先比較差異再覆蓋。
+## 已知限制
+- 若官方 TPEx API 持續回傳損毀 JSON，重試無法保證成功。上櫃無舊快照時仍會顯示 0，應檢查 Actions 警告或嘗試之後再執行。
+- 使用者最近可能透過 Codex 更新 `market.js` 與抓取器。本包以先前 v1.7.2 原始碼為基底；安裝前請比對差異，避免覆蓋較新的修改。
+- 其他獨立模組（0050、006208、009816、三大法人、ETF 試算）均不修改。
