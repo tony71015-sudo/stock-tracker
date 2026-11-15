@@ -65,50 +65,43 @@ jobs:
           python scripts/update_market.py || echo '::warning::Stock market snapshot unavailable; showing the previous validated data or an empty warning.'
       # Active ETF holdings have their own dedicated workflows.
       # Do not update data/active-etf here: its uncommitted files block git rebase.
-      - name: Commit public market datasets to repository (safe retry)
+      - name: Publish public market datasets (reconcile concurrent updates)
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Active ETF snapshots are published by their dedicated workflow.
-          # Avoid rewriting their shared status.json from this workflow.
-          git add -A -- data/institutional data/market
-          # Defensive isolation: other updaters own active ETF snapshots.
-          # Never try to rebase over changes from an unrelated data pipeline.
-          if [ -n "$(git status --porcelain -- data/active-etf)" ]; then
-            echo '::notice::Discarding transient active ETF edits in this job; dedicated ETF workflows publish these snapshots.'
-            git restore --worktree -- data/active-etf || true
-            git clean -fd -- data/active-etf
-          fi
-          if git diff --cached --quiet; then
-            echo "Public data unchanged"
-          else
-            git commit -m "data: refresh public institutional and market datasets"
-            # If future scripts generate additional untracked/modified files,
-            # isolate them rather than allowing an unsafe rebase or force push.
-            if [ -n "$(git status --porcelain)" ]; then
-              echo '::warning::Other generated files exist; stashing them for this data-only push.'
-              git stash push --include-untracked -m 'temporary unrelated generated data'
+          BASE_SHA="$(git rev-parse HEAD)"
+          SNAP_DIR="$(mktemp -d)"
+          trap 'rm -rf "$SNAP_DIR"' EXIT
+          python scripts/reconcile_public_market_data.py snapshot --directory "$SNAP_DIR"
+          for attempt in 1 2 3 4 5; do
+            echo "::group::Publish attempt $attempt of 5"
+            git fetch origin main
+            # Only reset this temporary GitHub Actions checkout. Snapshot data is in $SNAP_DIR.
+            # This avoids git rebase on four concurrently generated JSON files.
+            git reset --hard origin/main
+            python scripts/reconcile_public_market_data.py apply --directory "$SNAP_DIR" --base "$BASE_SHA"
+            git add -A -- data/institutional data/market
+            if git diff --cached --quiet; then
+              echo '::notice::No newer public institutional/market data to commit; use latest remote assets.'
+              echo '::endgroup::'
+              break
             fi
-            for attempt in 1 2 3 4 5; do
-              git fetch origin main
-              if ! git rebase origin/main; then
-                git rebase --abort || true
-                echo '::error::Data conflict. Please inspect changes; never force push.'
-                exit 1
-              fi
-              if git push origin HEAD:main; then
-                echo 'Public market datasets pushed successfully.'
-                break
-              fi
-              if [ "$attempt" -eq 5 ]; then
-                echo '::error::Could not push after 5 tries.'
-                exit 1
-              fi
-              sleep $((attempt * 2))
-            done
-          fi
+            git commit -m 'data: reconcile public institutional and market datasets'
+            if git push origin HEAD:main; then
+              echo '::notice::Published institutional and market data to main.'
+              echo '::endgroup::'
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo '::error::Data push rejected after 5 attempts; no force push performed.'
+              exit 1
+            fi
+            echo '::warning::Remote changed; reloading latest main and reconciling again.'
+            echo '::endgroup::'
+            sleep "$((attempt * 2))"
+          done
       - name: Stage public website assets
         run: |
           mkdir -p _site/data
