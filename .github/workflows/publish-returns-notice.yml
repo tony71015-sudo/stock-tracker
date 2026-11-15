@@ -6,7 +6,7 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: trade-compass-pages
   cancel-in-progress: false
 jobs:
   fix-and-deploy:
@@ -67,6 +67,8 @@ jobs:
           assert (dst/'index_etf.js').is_file() and (dst/'index_etf_returns.js').is_file()
           print('PASS: the published website includes the warning and corrected ETF page')
           PY
+      - name: Validate staged website and run offline regression tests
+        run: python -B scripts/validate_site.py _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

@@ -3,7 +3,7 @@ import importlib.util
 from pathlib import Path
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'update_institutions.py'
+SCRIPT = Path(__file__).resolve().parent / 'scripts' / 'update_institutions.py'
 spec = importlib.util.spec_from_file_location('update_institutions', SCRIPT)
 u = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(u)

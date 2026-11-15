@@ -61,7 +61,7 @@ async function fetchOfficialDay(code,date,refresh=false){
   return true;
  }catch(e){
   // Offline fallback from a previously verified IndexedDB entry.
-  try{const saved=await cache()?.getSnapshot(code,date);if(saved&&validPublishedSnapshot(saved)){appendArchive(code,saved);state.cacheMessage='網路暫不可用，已使用本機已驗證快照';return true;}}catch(_e){}
+  try{const saved=await cache()?.getSnapshot(code,date);if(saved&&validPublishedSnapshot(saved)){appendArchive(code,saved);state.cacheMessage='網路暫不可用，已使用本機格式檢查通過的快照';return true;}}catch(_e){}
   state.archiveError[code]=date+'：'+String(e.message||e);
   return false;
  }
@@ -351,7 +351,7 @@ function html(){if(!state.loaded&&!state.loading)queueMicrotask(load);
  s+='</tbody></table></div>';
  }
  s+=`</section><section class="panel tc-pad"><h2 class="panel-title">歷次快照與資料來源</h2><div class="table-wrap"><table class="data-table"><thead><tr><th>資料日期</th><th>來源</th><th>持股檔數</th><th>完整性</th><th>操作</th></tr></thead><tbody>`;
- for(const x of snapshots){s+=`<tr><td>${esc(x.date)}</td><td>${esc(x.source||'未註明')}</td><td>${fmt(x.holdings.length)}</td><td>${x.complete?'<span class="tag mint">已確認完整</span>':'<span class="tag gold">未確認完整</span>'}</td><td>${x.origin==='local'?`<button class="btn sm danger" data-active-remove="${esc(x.date)}">刪除本機快照</button>`:'公開快照'}</td></tr>`;}
+ for(const x of snapshots){s+=`<tr><td>${esc(x.date)}</td><td>${esc(x.source||'未註明')}</td><td>${fmt(x.holdings.length)}</td><td>${x.complete?'<span class="tag mint">標示完整，待來源核對</span>':'<span class="tag gold">未確認完整</span>'}</td><td>${x.origin==='local'?`<button class="btn sm danger" data-active-remove="${esc(x.date)}">刪除本機快照</button>`:'公開快照'}</td></tr>`;}
  s+=`</tbody></table></div></section><div class="tc-note">資料儲存：手動持股 CSV 匯入後，保留在此瀏覽器的 localStorage；公開持股使用 IndexedDB 快取（鍵：${STORAGE}）。更換電腦／清除瀏覽器網站資料可能遺失，請定期按「備份持股快照」。這份資料與原交易紀錄 JSON 備份分開。</div>`;
  return s;
 }

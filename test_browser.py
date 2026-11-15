@@ -9,7 +9,7 @@ import threading
 import unittest
 from playwright.sync_api import sync_playwright
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parent
 spec=importlib.util.spec_from_file_location('update_institutions',ROOT/'scripts/update_institutions.py')
 u=importlib.util.module_from_spec(spec);spec.loader.exec_module(u)
 

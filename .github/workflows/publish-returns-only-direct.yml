@@ -6,7 +6,7 @@ permissions:
   pages: write
   id-token: write
 concurrency:
-  group: pages
+  group: trade-compass-pages
   cancel-in-progress: false
 jobs:
   modify-and-deploy:
@@ -66,6 +66,8 @@ jobs:
           assert (dst/'index_etf_returns.js').exists()
           print('Published files:',len(list(dst.rglob('*'))))
           PY
+      - name: Validate staged website and run offline regression tests
+        run: python -B scripts/validate_site.py _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

@@ -96,6 +96,8 @@ jobs:
           else
             echo '⚠️ 0050 配息 JSON 缺漏；此版本仍顯示未含息警示，無法保證含息收益。' >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Validate staged website and run offline regression tests
+        run: python -B scripts/validate_site.py _site
       - uses: actions/configure-pages@v5
       - name: Upload the single github-pages artifact
         uses: actions/upload-pages-artifact@v4

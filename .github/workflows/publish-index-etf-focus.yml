@@ -50,6 +50,8 @@ jobs:
           echo "Published files:"
           ls -l _site/index.html _site/index_etf_focus.js
 
+      - name: Validate staged website and run offline regression tests
+        run: python -B scripts/validate_site.py _site
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
