@@ -1,0 +1,11 @@
+{
+  "etf": "0050",
+  "checkedAt": "2026-11-15T11:13:59.898696+00:00",
+  "snapshotsParsed": 1,
+  "newSnapshots": 1,
+  "errors": [
+    "official https://www.yuantaetfs.com/product/detail/0050/ratio: ValueError: Yuanta: explicit fund stock observation date unavailable"
+  ],
+  "status": "saved",
+  "note": "不可將 PCF/前十大持股視為完整實際持股；第三方資料需交叉核對"
+}

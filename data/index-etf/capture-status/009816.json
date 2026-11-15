@@ -1,0 +1,11 @@
+{
+  "etf": "009816",
+  "checkedAt": "2026-11-15T11:14:20.811187+00:00",
+  "snapshotsParsed": 1,
+  "newSnapshots": 1,
+  "errors": [
+    "official https://www.kgifund.com.tw/Fund/Detail?fundID=J023: ValueError: Official page exposes no verified full-position shares; do not parse top 10 as complete"
+  ],
+  "status": "saved",
+  "note": "不可將 PCF/前十大持股視為完整實際持股；第三方資料需交叉核對"
+}

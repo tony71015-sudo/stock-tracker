@@ -16,7 +16,7 @@ const redraw=()=>{if(window.TradeCompassBridge?.isPage?.('indexETF'))window.Trad
 async function json(path){const r=await fetch(path+(path.includes('?')?'&':'?')+'v='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);return r.json();}
 function validateSnapshot(s,etf,expectedDate){
  if(!s||s.etf!==etf||!validDay(s.date)||expectedDate&&s.date!==expectedDate||!Array.isArray(s.holdings))throw Error('ETF 或持股日期不符');
- if(s.holdings.length<40)throw Error('少於 40 檔，不能確認為完整成分股持股');
+ if(s.holdings.length < (etf==='006208' && s.sourceType==='official' ? 25 : 40))throw Error('持股檔數不足，無法確認完整實際持股');
  const seen=new Set();let sum=0,weights=0;
  const holdings=s.holdings.map(h=>{const code=String(h.code||h.symbol||'').trim().toUpperCase();if(!safeCode(code)||seen.has(code))throw Error('成分股代號無效或重複');seen.add(code);
  const shares=h.shares==null||h.shares===''?null:Number(h.shares);
@@ -98,7 +98,7 @@ function render(){if(!state.initialized){state.initialized=true;loadInstitutiona
  ${state.warning?`<p class="alert">${esc(state.warning)}</p>`:''}${state.message?`<p class="alert">${esc(state.message)}</p>`:''}
  <div class="note-box mt16">法人買賣超是<strong>個股在市場上的交易</strong>，不是該 ETF 的申購量或經理人買賣量。法人資料依已發布的最新統計區間顯示，可能與兩個持股日期不同；無資料一律顯示「—」。</div></section>`;
  if(state.instError)html+=`<div class="alert mt16">${esc(state.instError)}</div>`;
- if(!cur||!base){html+=`<section class="panel" style="padding:24px;margin-top:16px"><h2 class="panel-title">暫時無法比較</h2><p class="subtitle">本 ETF 需要至少兩個不同日期、每份不少於 40 檔成分股的完整持股資料。官方資料未接通時可於下方匯入完整持股 CSV（保存在本機）。</p></section>`;}
+ if(!cur||!base){html+=`<section class="panel" style="padding:24px;margin-top:16px"><h2 class="panel-title">暫時無法比較</h2><p class="subtitle">本 ETF 需要至少兩個不同日期、通過來源與完整性驗證的實際持股資料。官方資料未接通時可於下方匯入完整持股 CSV（保存在本機）。</p></section>`;}
  else{const c={新增:0,移出:0,股數增加:0,股數減少:0};rows.forEach(r=>{if(c[r.status]!==undefined)c[r.status]++;});
  html+=`<div class="grid stats">${[['新增股票',c.新增],['移出股票',c.移出],['股數增加',c.股數增加],['股數減少',c.股數減少]].map(([l,v])=>`<section class="panel metric"><div class="metric-label">${l}</div><div class="metric-value">${fmt(v)}</div></section>`).join('')}</div>`;
  const dateLabels=['TWSE','TPEX'].map(m=>state.inst?.marketData?.[m]?.date).filter(Boolean);

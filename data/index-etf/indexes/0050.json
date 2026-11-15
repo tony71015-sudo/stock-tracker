@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "etf": "0050",
+  "dates": [
+    "2026-11-13"
+  ],
+  "dataKind": "actual_portfolio",
+  "status": "single_day",
+  "sourceTypesByDate": {
+    "2026-11-13": "third_party"
+  },
+  "updatedAt": "2026-11-15T11:14:21.235621+00:00",
+  "note": "實際持股快照。第三方完整持股經程式結構檢查，非投信官方逐筆驗證；PCF 不得冒充基金持股。"
+}
