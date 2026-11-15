@@ -1,0 +1,75 @@
+name: 更新006208富邦台50官方配息（保存後台）
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: '查詢 2012 年上市後所有年度（第一次建議使用 true）'
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '20 13 * * 1' # 週一 21:20 台灣時間
+permissions:
+  contents: write
+concurrency:
+  group: tradecompass-006208-dividend-data
+  cancel-in-progress: false
+jobs:
+  dividend-archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install official page parser
+        run: python -m pip install beautifulsoup4
+      - name: Update and verify historical dividend records
+        env:
+          FULL: ${{ inputs.full || 'false' }}
+        run: |
+          if [ "$FULL" = "true" ]; then
+            python scripts/update_006208_dividends.py --full
+          else
+            python scripts/update_006208_dividends.py --years 4
+          fi
+      - name: Commit only 006208 backend dividend JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          FILE=data/index-etf/dividends/006208.json
+          cp "$FILE" /tmp/006208-verified.json
+          for i in 1 2 3 4 5; do
+            git fetch origin main
+            git reset --hard origin/main
+            # Merge newly verified events with remote; never overwrite its other events.
+            python - <<'PY'
+          import json, pathlib
+          p=pathlib.Path('data/index-etf/dividends/006208.json')
+          incoming=json.loads(pathlib.Path('/tmp/006208-verified.json').read_text())
+          remote=json.loads(p.read_text()) if p.exists() else {'etf':'006208','events':[]}
+          events={x['exDate']:x for x in remote.get('events',[]) if isinstance(x,dict) and x.get('exDate')}
+          for x in incoming.get('events',[]):
+              if x.get('exDate'):
+                  events[x['exDate']]=x
+          remote.update(incoming)
+          remote['events']=[events[k] for k in sorted(events)]
+          p.parent.mkdir(parents=True,exist_ok=True)
+          p.write_text(json.dumps(remote,ensure_ascii=False,indent=2)+'\n')
+          PY
+            git add "$FILE"
+            if git diff --cached --quiet; then
+              echo "006208 dividend data unchanged"
+              exit 0
+            fi
+            git commit -m 'data: archive verified 006208 dividends'
+            if git push origin HEAD:main; then exit 0; fi
+            echo "Concurrent update; retrying $i/5"
+          done
+          echo 'Failed to push 006208 dividends safely after five attempts' >&2
+          exit 1
