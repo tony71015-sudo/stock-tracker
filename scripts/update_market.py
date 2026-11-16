@@ -152,6 +152,60 @@ def parse_daytrade(payload):
             if re.fullmatch('[0-9A-Z]{4,8}',code) and n is not None and n>=0:tables.append((code,n))
     return dict(tables)
 
+def fetch_twse_rwd_latest(today=None):
+    """Same-day TWSE official RWD fallback when the OpenAPI snapshot lags.
+
+    The RWD report has a fields header and positional rows. Require explicit
+    column names and validate each record using the existing price rules.
+    """
+    today = today or dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
+    url = ('https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL'
+           '?response=json&date=' + today.strftime('%Y%m%d'))
+    payload = fetch_json(url, attempts=2)
+    if not isinstance(payload, dict) or payload.get('stat') != 'OK':
+        raise ValueError('TWSE RWD report not ready')
+    fields = payload.get('fields')
+    rows = payload.get('data')
+    if not isinstance(fields, list) or not isinstance(rows, list):
+        raise ValueError('TWSE RWD missing fields/data')
+    names = [str(x).replace(' ', '').replace('\\n', '') for x in fields]
+    def index(*options):
+        for option in options:
+            for i, name in enumerate(names):
+                if option in name:
+                    return i
+        raise ValueError('TWSE RWD missing required column: ' + '/'.join(options))
+    indices = {
+        'code': index('證券代號'),
+        'name': index('證券名稱'),
+        'open': index('開盤價'),
+        'high': index('最高價'),
+        'low': index('最低價'),
+        'close': index('收盤價'),
+        'volume': index('成交股數'),
+        'value': index('成交金額'),
+    }
+    # Prefer response date, never silently label old data as today.
+    report_date = iso(payload.get('date'))
+    if not report_date:
+        raise ValueError('TWSE RWD report date missing or invalid')
+    normalized = []
+    for row in rows:
+        if not isinstance(row, list) or len(row) <= max(indices.values()):
+            continue
+        normalized.append({
+            'Code': row[indices['code']], 'Name': row[indices['name']],
+            'Date': report_date,
+            'OpeningPrice': row[indices['open']],
+            'HighestPrice': row[indices['high']],
+            'LowestPrice': row[indices['low']],
+            'ClosingPrice': row[indices['close']],
+            'TradeVolume': row[indices['volume']],
+            'TradeValue': row[indices['value']],
+        })
+    return parse_twse(normalized)
+
+
 def choose_date(rows):
     counts={}
     for row in rows:counts[row['date']]=counts.get(row['date'],0)+1
@@ -178,6 +232,18 @@ def update():
                 except Exception as second_error:
                     raise ValueError('primary: '+str(first_error)[:220]+'; secondary: '+str(second_error)[:220])
             d=choose_date(records)
+            if m == 'TWSE':
+                # OpenAPI can lag behind the official same-day afterTrading report.
+                # Never replace a newer validated snapshot with an older fallback.
+                try:
+                    alternative=fetch_twse_rwd_latest()
+                    alt_date=choose_date(alternative)
+                    if alt_date > d:
+                        records=alternative
+                        d=alt_date
+                        warnings.append('TWSE: newer official RWD closing report used instead of lagging OpenAPI')
+                except Exception as fallback_error:
+                    warnings.append('TWSE: same-day RWD fallback unavailable ('+str(fallback_error)[:120]+')')
             records=[x for x in records if x['date']==d]
             records=list({r['code']:r for r in records}.values())
             # A sudden loss of most symbols often means the official schema changed.
