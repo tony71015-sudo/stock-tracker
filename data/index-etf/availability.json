@@ -1,0 +1,68 @@
+{
+  "schema": 1,
+  "updatedAt": "2026-11-16T22:50:31.112698+00:00",
+  "funds": {
+    "0050": {
+      "name": "元大台灣50",
+      "portfolioStatus": "comparable",
+      "verifiedPortfolioDates": [
+        "2026-11-13",
+        "2026-11-16"
+      ],
+      "verifiedPortfolioCount": 2,
+      "portfolioLatest": "2026-11-16",
+      "indexDatesListed": 2,
+      "priceFileExists": true,
+      "priceRowCountIfRowsSchema": 4128,
+      "dividendPolicy": "distributes",
+      "dividendFileExists": false,
+      "dividendEventCount": null,
+      "notes": "有日期索引仍需有效的實際持股檔；成分股法人交易不可當成基金交易。"
+    },
+    "006208": {
+      "name": "富邦台50",
+      "portfolioStatus": "comparable",
+      "verifiedPortfolioDates": [
+        "2026-10-29",
+        "2026-10-30",
+        "2026-11-02",
+        "2026-11-03",
+        "2026-11-04",
+        "2026-11-05",
+        "2026-11-06",
+        "2026-11-09",
+        "2026-11-10",
+        "2026-11-11",
+        "2026-11-12",
+        "2026-11-13",
+        "2026-11-16"
+      ],
+      "verifiedPortfolioCount": 13,
+      "portfolioLatest": "2026-11-16",
+      "indexDatesListed": 13,
+      "priceFileExists": true,
+      "priceRowCountIfRowsSchema": 3305,
+      "dividendPolicy": "distributes",
+      "dividendFileExists": true,
+      "dividendEventCount": 24,
+      "notes": "有日期索引仍需有效的實際持股檔；成分股法人交易不可當成基金交易。"
+    },
+    "009816": {
+      "name": "凱基台灣TOP50",
+      "portfolioStatus": "comparable",
+      "verifiedPortfolioDates": [
+        "2026-11-13",
+        "2026-11-16"
+      ],
+      "verifiedPortfolioCount": 2,
+      "portfolioLatest": "2026-11-16",
+      "indexDatesListed": 2,
+      "priceFileExists": true,
+      "priceRowCountIfRowsSchema": 187,
+      "dividendPolicy": "no_distribution",
+      "dividendFileExists": true,
+      "dividendEventCount": 0,
+      "notes": "有日期索引仍需有效的實際持股檔；成分股法人交易不可當成基金交易。"
+    }
+  }
+}
