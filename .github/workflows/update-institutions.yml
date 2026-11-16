@@ -15,6 +15,7 @@ on:
       - 'tools.css'
       - 'scripts/**'
       - 'data/active-etf/sources.json'
+      - 'data/index-etf/dividends/**'
       - '.github/workflows/update-institutions.yml'
   schedule:
     # Taiwan local 20:35 and 22:35 weekdays (UTC 12:35 and 14:35).
