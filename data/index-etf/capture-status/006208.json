@@ -1,9 +1,22 @@
 {
   "etf": "006208",
-  "checkedAt": "2026-11-15T11:14:18.452190+00:00",
-  "snapshotsParsed": 12,
-  "newSnapshots": 12,
-  "errors": [],
+  "checkedAt": "2026-11-16T21:14:26.012144+00:00",
+  "snapshotsParsed": 1,
+  "newSnapshots": 1,
+  "errors": [
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F16: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F13: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F12: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F11: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F10: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F09: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F06: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F05: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F04: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F03: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F11%2F02: ValueError: Fubon: no explicit 資料日期",
+    "official https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?lan=TW&stkId=006208&ddate=2026%2F10%2F30: ValueError: Fubon: no explicit 資料日期"
+  ],
   "status": "saved",
   "note": "不可將 PCF/前十大持股視為完整實際持股；第三方資料需交叉核對"
 }
