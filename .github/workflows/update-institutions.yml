@@ -17,8 +17,9 @@ on:
       - 'data/active-etf/sources.json'
       - '.github/workflows/update-institutions.yml'
   schedule:
-    # Taiwan local 16:20, 20:35 and 22:35 weekdays (UTC 08:20, 12:35, 14:35).
-    # Early run publishes newly available official reports; evening runs capture later corrections.
+    # Taiwan local 14:35, 15:35, 16:20, 20:35 and 22:35 weekdays.
+    # Official closing data can be delayed after 13:30; retry without inventing prices.
+    - cron: '35 6,7 * * 1-5'
     - cron: '20 8 * * 1-5'
     - cron: '35 12,14 * * 1-5'
   workflow_dispatch:
