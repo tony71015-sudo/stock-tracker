@@ -105,6 +105,8 @@ jobs:
             echo '::endgroup::'
             sleep "$((attempt * 2))"
           done
+      - name: Test 0050 dividend parser offline
+        run: python -m unittest discover -s tests -p 'test_refresh_0050_dividends.py' -v
       - name: Refresh verified 0050 dividend archive
         run: |
           python scripts/refresh_0050_dividends.py
