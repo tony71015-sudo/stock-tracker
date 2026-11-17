@@ -105,6 +105,34 @@ jobs:
             echo '::endgroup::'
             sleep "$((attempt * 2))"
           done
+      - name: Test 0050 dividend parser offline
+        run: python -m unittest discover -s tests -p 'test_refresh_0050_dividends.py' -v
+      - name: Refresh verified 0050 dividend archive
+        run: |
+          python scripts/refresh_0050_dividends.py
+          if [ -f data/index-etf/dividends/0050.json ]; then
+            echo 'Validated 0050 dividend archive available for publication.'
+          else
+            echo '::warning::Official 0050 dividend archive unavailable; simulator must continue to warn that total return is incomplete.'
+          fi
+      - name: Commit validated 0050 dividends for durable Pages publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f data/index-etf/dividends/0050.json ]; then
+            echo '::notice::No validated dividend archive to publish.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/index-etf/dividends/0050.json
+          if git diff --cached --quiet; then
+            echo 'No new dividend data.'
+            exit 0
+          fi
+          git commit -m 'data: publish validated 0050 dividend archive'
+          # Never force-push or silently overwrite concurrent market updates.
+          git push origin HEAD:main
       - name: Stage public website assets
         run: |
           mkdir -p _site/data
