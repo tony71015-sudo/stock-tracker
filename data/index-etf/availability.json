@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updatedAt": "2026-11-17T21:39:47.213607+00:00",
+  "updatedAt": "2026-11-18T21:19:17.509723+00:00",
   "funds": {
     "0050": {
       "name": "元大台灣50",
@@ -8,13 +8,14 @@
       "verifiedPortfolioDates": [
         "2026-11-13",
         "2026-11-16",
-        "2026-11-17"
+        "2026-11-17",
+        "2026-11-18"
       ],
-      "verifiedPortfolioCount": 3,
-      "portfolioLatest": "2026-11-17",
-      "indexDatesListed": 3,
+      "verifiedPortfolioCount": 4,
+      "portfolioLatest": "2026-11-18",
+      "indexDatesListed": 4,
       "priceFileExists": true,
-      "priceRowCountIfRowsSchema": 4129,
+      "priceRowCountIfRowsSchema": 4130,
       "dividendPolicy": "distributes",
       "dividendFileExists": false,
       "dividendEventCount": null,
@@ -37,13 +38,14 @@
         "2026-11-12",
         "2026-11-13",
         "2026-11-16",
-        "2026-11-17"
+        "2026-11-17",
+        "2026-11-18"
       ],
-      "verifiedPortfolioCount": 14,
-      "portfolioLatest": "2026-11-17",
-      "indexDatesListed": 14,
+      "verifiedPortfolioCount": 15,
+      "portfolioLatest": "2026-11-18",
+      "indexDatesListed": 15,
       "priceFileExists": true,
-      "priceRowCountIfRowsSchema": 3306,
+      "priceRowCountIfRowsSchema": 3307,
       "dividendPolicy": "distributes",
       "dividendFileExists": true,
       "dividendEventCount": 24,
@@ -55,13 +57,14 @@
       "verifiedPortfolioDates": [
         "2026-11-13",
         "2026-11-16",
-        "2026-11-17"
+        "2026-11-17",
+        "2026-11-18"
       ],
-      "verifiedPortfolioCount": 3,
-      "portfolioLatest": "2026-11-17",
-      "indexDatesListed": 3,
+      "verifiedPortfolioCount": 4,
+      "portfolioLatest": "2026-11-18",
+      "indexDatesListed": 4,
       "priceFileExists": true,
-      "priceRowCountIfRowsSchema": 188,
+      "priceRowCountIfRowsSchema": 189,
       "dividendPolicy": "no_distribution",
       "dividendFileExists": true,
       "dividendEventCount": 0,
