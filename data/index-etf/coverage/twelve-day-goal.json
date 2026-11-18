@@ -1,22 +1,24 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-17T20:00:08.959425+00:00",
+  "generatedAt": "2026-11-18T19:35:17.475668+00:00",
   "goal": "各ETF至少12個不同交易日期的實際持股快照",
   "funds": {
     "0050": {
       "etf": "0050",
       "targetTradingDates": 12,
-      "availableTradingDates": 3,
-      "remainingToTarget": 9,
+      "availableTradingDates": 4,
+      "remainingToTarget": 8,
       "targetReached": false,
       "latestTwelveDates": [
+        "2026-11-18",
         "2026-11-17",
         "2026-11-16",
         "2026-11-13"
       ],
       "earliestAvailableDate": "2026-11-13",
-      "latestAvailableDate": "2026-11-17",
+      "latestAvailableDate": "2026-11-18",
       "sourceTypesByDate": {
+        "2026-11-18": "third_party",
         "2026-11-17": "third_party",
         "2026-11-16": "third_party",
         "2026-11-13": "third_party"
@@ -26,10 +28,11 @@
     "006208": {
       "etf": "006208",
       "targetTradingDates": 12,
-      "availableTradingDates": 14,
+      "availableTradingDates": 15,
       "remainingToTarget": 0,
       "targetReached": true,
       "latestTwelveDates": [
+        "2026-11-18",
         "2026-11-17",
         "2026-11-16",
         "2026-11-13",
@@ -40,12 +43,12 @@
         "2026-11-06",
         "2026-11-05",
         "2026-11-04",
-        "2026-11-03",
-        "2026-11-02"
+        "2026-11-03"
       ],
       "earliestAvailableDate": "2026-10-29",
-      "latestAvailableDate": "2026-11-17",
+      "latestAvailableDate": "2026-11-18",
       "sourceTypesByDate": {
+        "2026-11-18": "official",
         "2026-11-17": "official",
         "2026-11-16": "third_party",
         "2026-11-13": "official",
@@ -56,25 +59,26 @@
         "2026-11-06": "official",
         "2026-11-05": "official",
         "2026-11-04": "official",
-        "2026-11-03": "official",
-        "2026-11-02": "official"
+        "2026-11-03": "official"
       },
       "note": "只計入真正通過驗證且已保存的不同持股日期；不會複製或推估歷史股數。"
     },
     "009816": {
       "etf": "009816",
       "targetTradingDates": 12,
-      "availableTradingDates": 3,
-      "remainingToTarget": 9,
+      "availableTradingDates": 4,
+      "remainingToTarget": 8,
       "targetReached": false,
       "latestTwelveDates": [
+        "2026-11-18",
         "2026-11-17",
         "2026-11-16",
         "2026-11-13"
       ],
       "earliestAvailableDate": "2026-11-13",
-      "latestAvailableDate": "2026-11-17",
+      "latestAvailableDate": "2026-11-18",
       "sourceTypesByDate": {
+        "2026-11-18": "third_party",
         "2026-11-17": "third_party",
         "2026-11-16": "third_party",
         "2026-11-13": "third_party"
