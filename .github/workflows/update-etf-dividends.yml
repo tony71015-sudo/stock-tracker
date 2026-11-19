@@ -1,0 +1,42 @@
+name: 更新指數型 ETF 歷史配息資料
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/update_index_etf_dividends.py
+      - .github/workflows/update-etf-dividends.yml
+  workflow_dispatch:
+  schedule:
+    - cron: '45 12 * * 1-5' # 台北時間平日 20:45，盤後更新
+permissions:
+  contents: write
+concurrency:
+  group: index-etf-prices-history
+  cancel-in-progress: false
+jobs:
+  dividends:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout latest main
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Collect official TWSE distribution history
+        run: python scripts/update_index_etf_dividends.py
+      - name: Publish updated dividend archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/index-etf/dividends/*.json
+          if git diff --cached --quiet; then
+            echo 'No dividend archive changes.'
+          else
+            git commit -m 'Update official ETF dividend history'
+            git push
+          fi
