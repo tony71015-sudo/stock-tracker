@@ -138,7 +138,7 @@ def update(code, payload=None):
             'events': [],
             'note': '收益不分配；不得將無現金配息誤判為歷史資料缺漏',
         }
-        path.write_text(json.dumps(out, ensure_ascii=False, separators=(',', ':')) + '\\n', encoding='utf-8')
+        path.write_text(json.dumps(out, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
         print('009816: official non-distributing ETF; empty events are expected')
         return out
 
@@ -183,7 +183,7 @@ def update(code, payload=None):
             'Any failed query years are listed; do not infer zero distributions for those periods.'
         ),
     }
-    path.write_text(json.dumps(out, ensure_ascii=False, separators=(',', ':')) + '\\n', encoding='utf-8')
+    path.write_text(json.dumps(out, ensure_ascii=False, separators=(',', ':')) + '\n', encoding='utf-8')
     print(f'{code}: verified_events={len(sorted_events)} first={out["firstEventDate"]} last={out["lastEventDate"]} failed_years={failed_years}')
     return out
 
