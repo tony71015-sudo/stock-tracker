@@ -1,4 +1,4 @@
-name: 更新統一投信 00981A、00403A 每日完整持股並發布網站
+name: 更新統一投信 00981A、00403A、00988A 每日完整持股並發布網站
 
 on:
   push:
@@ -46,7 +46,7 @@ jobs:
           timeout 600 python main.py --ezmoney
       - name: Validate and import latest 00981A and 00403A issuer holdings
         run: |
-          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A --code 00403A
+          python scripts/import_ezmoney_sqlite.py --sqlite /tmp/tw-active-etf-crawler/data/etf_holdings.db --code 00981A --code 00403A --code 00988A
       - name: Commit validated public snapshots only
         shell: bash
         run: |
