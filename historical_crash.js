@@ -98,6 +98,7 @@ function entryRisk(calc,amount){
 }
 function html(){
  return '<section class="panel" style="margin-top:18px;padding:22px 24px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="eyebrow">LONG-TERM INVESTING HISTORY</div><h2 class="panel-title">歷史股災回顧區</h2><p class="subtitle">回看台股大幅回檔的時間與跌幅，並比較不同入場日期之後實際遇到的下跌。</p></div><button class="btn" id="historyCrashRefresh">讀取最新資料</button></div>'+
+ "<section class=\"note-box mt16\"><h3>從 1999 年投入，現在值多少？</h3><p>假設資產依台股加權指數收盤點數同比例變動，可分割投入全部本金，不含股息與交易費用。這是指數模擬，早期年份沒有對應的 ETF 成交紀錄。</p><label>投入日 <input type=\"date\" id=\"pathStart\" value=\"1999-01-05\" min=\"1999-01-05\"></label> <label>本金（元） <input type=\"number\" id=\"pathCapital\" value=\"100000\" min=\"1\"></label> <button class=\"btn primary\" id=\"pathRun\">查看持有走勢</button><div id=\"pathResult\" aria-live=\"polite\"></div></section>"+
  '<div class="note-box mt16"><strong>回檔事件：</strong>以證交所加權指數自 1999 年起的每日收盤價辨識非重疊回檔，列出高點日、低點日、最大跌幅、下跌期間及收復前高所需交易日。ETF 持有報酬則使用各 ETF 自身的歷史價格與配息資料；價格尚未涵蓋的年份不會外推。</div>'+
  '<div class="filter-row" style="margin:16px 0"><label>投入金額（新臺幣）</label><input id="historyCrashAmount" class="field" type="number" min="1000" step="1000" value="100000" style="width:170px"><label>想查看哪些回檔？</label><select id="historyCrashThreshold" class="field"><option value="0.15">15% 以上</option><option value="0.20">20% 以上</option><option value="0.25">25% 以上</option><option value="0.30">30% 以上</option><option value="max" selected>只看歷史上跌最深的一次</option></select><label>報酬計算</label><select id="historyCrashMode" class="field"><option value="reinvest" selected>含息總報酬（配息再投入）</option><option value="cash">含息總報酬（配息留現金）</option><option value="price">純價格報酬（不含配息）</option></select><button id="historyCrashRun" class="btn primary">回顧歷次股災</button></div>'+
  '<div id="historyCrashResult" aria-live="polite"><p class="fine">按「回顧歷次股災」後，網站會讀取已發布的歷史價格與配息資料。</p></div>'+
@@ -151,9 +152,28 @@ async function runEntries(){
   target.innerHTML=out;
  }catch(e){target.innerHTML='<p class="alert">'+esc(e.message||String(e))+'</p>';}finally{if(btn)btn.disabled=false;}
 }
+async function showHoldingPath(){
+ const box=$('pathResult'),start=$('pathStart').value,capital=Number($('pathCapital').value);
+ try{
+ if(!start||!(capital>0)||!Number.isFinite(capital))throw Error('請輸入日期與正數本金');
+ await loadIndex();
+ const history=cache.index.rows;
+ if(start<history[0].date||start>history.at(-1).date)throw Error('請選擇資料涵蓋期間內的日期');
+ const rows=history.filter(r=>r.date>=start),value=r=>capital*r.close/rows[0].close;
+ const vals=rows.map(value),lo=Math.min(...vals),hi=Math.max(...vals);
+ const x=i=>10+680*i/Math.max(1,rows.length-1),y=v=>145-135*(v-lo)/(hi-lo||1);
+ const points=vals.map((v,i)=>x(i).toFixed(1)+','+y(v).toFixed(1)).join(' ');
+ const describe=i=>rows[i].date+'｜資產 '+money(vals[i])+' 元｜累積損益 '+money(vals[i]-capital)+' 元（'+pct(vals[i]/capital-1)+'）';
+ box.innerHTML='<p>買入日 '+rows[0].date+'｜'+describe(rows.length-1)+'</p><svg id="pathPlot" viewBox="0 0 700 155" preserveAspectRatio="none" style="width:100%;height:180px" aria-label="每日模擬資產走勢"><polyline fill="none" stroke="#087e76" stroke-width="2" points="'+points+'"/></svg><label>逐日查看 <input style="width:100%" id="pathDay" type="range" min="0" max="'+(rows.length-1)+'" value="'+(rows.length-1)+'"></label><output id="pathRead"></output><details open><summary>逐年損益｜查看上漲與下跌年份</summary><div class="table-wrap"><table class="data-table"><thead><tr><th>年末／最新日期</th><th>資產</th><th>當期損益</th><th>累積損益</th></tr></thead><tbody>'+rows.filter((r,i)=>i===rows.length-1||r.date.slice(0,4)!==rows[i+1].date.slice(0,4)).map((r,i,list)=>'<tr><td>'+r.date+'</td><td>'+money(value(r))+'</td><td>'+money(value(r)-(i?value(list[i-1]):capital))+'</td><td>'+money(value(r)-capital)+'</td></tr>').join('')+'</tbody></table></div></details>';
+ const slider=$('pathDay'),read=()=>{$('pathRead').textContent=describe(Number(slider.value));};slider.oninput=read;read();
+ $('pathPlot').onpointermove=e=>{const rect=e.currentTarget.getBoundingClientRect();slider.value=Math.round((((e.clientX-rect.left)/rect.width)*700-10)/680*(rows.length-1));read();};
+ const episodes=findEpisodes(rows,.15);
+ box.insertAdjacentHTML('beforeend','<details open><summary>持有期間回檔達 15% 的波段</summary>'+episodes.map(ep=>'<p>'+ep.peak.date+' 高點 '+money(value(ep.peak))+' 元 → '+ep.trough.date+' 低點 '+money(value(ep.trough))+' 元（'+pct(-ep.drawdown)+'），低點相對本金損益 '+money(value(ep.trough)-capital)+' 元。'+(ep.recovery?'收復前高日 '+ep.recovery:'截至資料日尚未收復前高')+'</p>').join('')+(episodes.length?'':'期間內無符合波段')+'</details>');
+ }catch(err){box.textContent=err.message;}
+}
 document.addEventListener('click',e=>{
  const b=e.target.closest?.('button');if(!b)return;
- if(b.id==='historyCrashRun'||b.id==='historyCrashRefresh'){run();}if(b.id==='historyEntryRun'){runEntries();}
+ if(b.id==='pathRun'){showHoldingPath();return;}if(b.id==='historyCrashRun'||b.id==='historyCrashRefresh'){run();}if(b.id==='historyEntryRun'){runEntries();}
 });
 window.TradeCompassHistoricalCrash={html};
 })();
