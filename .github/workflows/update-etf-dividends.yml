@@ -10,12 +10,17 @@ on:
     - cron: '45 12 * * 1-5' # 台北時間平日 20:45，盤後更新
 permissions:
   contents: write
+  pages: write
+  id-token: write
 concurrency:
   group: index-etf-prices-history
   cancel-in-progress: false
 jobs:
   dividends:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     timeout-minutes: 20
     steps:
       - name: Checkout latest main
@@ -32,7 +37,7 @@ jobs:
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.email '41898282+users.noreply.github.com'
           git add data/index-etf/dividends/*.json
           if git diff --cached --quiet; then
             echo 'No dividend archive changes.'
@@ -40,3 +45,38 @@ jobs:
             git commit -m 'Update official ETF dividend history'
             git push
           fi
+      - name: Stage complete static website including dividend archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          root=Path('.'); dst=Path('_site')
+          if dst.exists(): shutil.rmtree(dst)
+          dst.mkdir()
+          allowed={'.html','.js','.css','.svg','.png','.jpg','.jpeg','.webp','.ico','.json','.txt','.xml','.webmanifest'}
+          for item in root.iterdir():
+              if item.name in {'.git','.github','_site','node_modules','.venv','venv','__pycache__','tests','scripts'}:
+                  continue
+              if item.is_file() and item.suffix.lower() in allowed:
+                  shutil.copy2(item,dst/item.name)
+              elif item.name in {'data','assets','images','fonts'} and item.is_dir():
+                  shutil.copytree(item,dst/item.name)
+          if not (dst/'index.html').exists():
+              raise SystemExit('index.html missing from Pages artifact')
+          archive=dst/'data/index-etf/dividends/0050.json'
+          if not archive.exists():
+              raise SystemExit('0050 official dividend archive missing from Pages artifact')
+          print('0050 dividend events:',len(__import__('json').loads(archive.read_text())['events']))
+          (dst/'.nojekyll').touch()
+          print('Static site files:',len([p for p in dst.rglob('*') if p.is_file()]))
+          PY
+      - uses: actions/configure-pages@v5
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
