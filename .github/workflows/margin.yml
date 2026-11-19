@@ -1,0 +1,25 @@
+name: 更新上市融資餘額
+on:
+  schedule:
+    - cron: '1 13 * * *'
+  push:
+    paths: ['.github/workflows/margin.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  margin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - run: python scripts/update_margin_balance.py
+      - run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add data/margin
+          git diff --cached --quiet && exit 0
+          git commit -m 'data: update TWSE margin history'
+          git pull --rebase origin main
+          git push origin HEAD:main
