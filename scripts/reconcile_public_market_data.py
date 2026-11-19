@@ -13,8 +13,8 @@ import shutil
 import subprocess
 
 ROOT = Path.cwd()
-ALLOWED = ("data/institutional/", "data/market/")
-TIME_KEYS = ("generatedAt", "updatedAt", "attemptedAt", "lastUpdated", "timestamp", "date")
+ALLOWED = ("data/institutional/", "data/market/", "data/history/")
+TIME_KEYS = ("generatedAt", "updatedAt", "attemptedAt", "lastUpdated", "timestamp", "date", "asOf")
 
 
 def git(*args, check=True):
@@ -76,9 +76,9 @@ def merge_market_flow(remote, generated):
 
 def snapshot(folder):
     folder.mkdir(parents=True, exist_ok=True)
-    modified = git("diff", "--name-only", "-z", "HEAD", "--", "data/institutional", "data/market").stdout
-    new = git("ls-files", "--others", "--exclude-standard", "-z", "--", "data/institutional", "data/market").stdout
-    staged = git("diff", "--cached", "--name-only", "-z", "--", "data/institutional", "data/market").stdout
+    modified = git("diff", "--name-only", "-z", "HEAD", "--", "data/institutional", "data/market", "data/history").stdout
+    new = git("ls-files", "--others", "--exclude-standard", "-z", "--", "data/institutional", "data/market", "data/history").stdout
+    staged = git("diff", "--cached", "--name-only", "-z", "--", "data/institutional", "data/market", "data/history").stdout
     names = {n.decode("utf-8") for n in (modified + new + staged).split(b"\0") if n}
     names = sorted(n for n in names if allowed(n) and (ROOT / n).is_file())
     for name in names:
