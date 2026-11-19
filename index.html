@@ -312,7 +312,7 @@ function notify(msg){const el=$('#toast');if(!el)return;el.textContent=msg;el.cl
 const nameOf=s=>{const recent=[...db.transactions].reverse().find(t=>t.symbol===s&&t.name);return recent?.name||s;};
 const holdings=()=>C.totals(db.transactions,db.quotes,asOf,db.settings,db.manualPrices);
 function marginPage(){
- return '<section class="panel" style="padding:24px"><h2>上市融資查詢</h2><p>查詢大盤融資金額，或輸入上市股票代號查看融資交易單位。</p><label>股票代號 <input class="field" id="marginCode" placeholder="留白查大盤"></label> <label>交易日 <select class="field" id="marginWindow">'+[10,20,60,180,240].map(n=>'<option>'+n+'</option>').join('')+'</select></label> <button class="btn primary" id="marginRead">查詢</button><p>實際斷頭戶數、處分金額與斷頭比：證交所融資餘額日報未揭露。</p><div id="marginResults" aria-live="polite"></div></section>';
+ return '<section class="panel" style="padding:24px"><h2>上市融資查詢</h2><p>查詢大盤融資金額，或輸入上市股票代號查看融資交易單位。</p><label>股票代號 <input class="field" id="marginCode" placeholder="留白查大盤"></label> <label>觀察期間 <select class="field" id="marginWindow"><option value="10">10 個交易日</option><option value="20" selected>近一個月（20 個交易日）</option><option value="60">近一季（60 個交易日）</option><option value="120">近半年（120 個交易日）</option><option value="180">180 個交易日</option><option value="240">近一年（240 個交易日）</option></select></label> <button class="btn primary" id="marginRead">查詢</button><p>實際斷頭戶數、處分金額與斷頭比：證交所融資餘額日報未揭露。</p><div id="marginResults" aria-live="polite"></div></section>';
 }
 document.addEventListener('click',async e=>{
  if(!e.target.closest('#marginRead'))return;
