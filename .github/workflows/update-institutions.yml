@@ -56,6 +56,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Fetch official TAIEX history since 1999
+        run: python scripts/update_taiex_history.py
       - name: Fetch official institutional reports
         env:
           UPDATE_MODE: ${{ github.event.inputs.mode || 'auto' }}
@@ -87,7 +89,7 @@ jobs:
             # This avoids git rebase on four concurrently generated JSON files.
             git reset --hard origin/main
             python scripts/reconcile_public_market_data.py apply --directory "$SNAP_DIR" --base "$BASE_SHA"
-            git add -A -- data/institutional data/market
+            git add -A -- data/institutional data/market data/history
             if git diff --cached --quiet; then
               echo '::notice::No newer public institutional/market data to commit; use latest remote assets.'
               echo '::endgroup::'
@@ -149,7 +151,7 @@ jobs:
             fi
           done
           # Optional datasets do not exist before the first successful fetch.
-          for dataset in institutional market active-etf index-etf; do
+          for dataset in institutional market active-etf index-etf history; do
             if [ -d "data/$dataset" ]; then
               cp -R "data/$dataset" "_site/data/$dataset"
             else
