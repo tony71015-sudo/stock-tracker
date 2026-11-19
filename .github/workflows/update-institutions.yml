@@ -12,6 +12,7 @@ on:
       - 'active_etf.js'
       - 'index_etf.js'
       - 'index_etf_returns.js'
+      - 'historical_crash.js'
       - 'tools.css'
       - 'scripts/**'
       - 'data/active-etf/sources.json'
@@ -138,7 +139,7 @@ jobs:
         run: |
           mkdir -p _site/data
           # Preserve core assets; optionally stage newer frontend modules.
-          for file in index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js index_etf_returns.js tools.css; do
+          for file in index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js index_etf_returns.js historical_crash.js tools.css; do
             if [ -f "$file" ]; then
               cp "$file" _site/
             elif [ "$file" = index_etf_returns.js ]; then
