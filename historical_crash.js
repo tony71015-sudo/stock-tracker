@@ -49,7 +49,7 @@ function findEpisodes(rows,threshold){
  return out;
 }
 function simulate(code,start,amount,mode){
- const bars=cache.prices[code].filter(x=>x.date>=start);if(!bars.length)return null;
+ const available=cache.prices[code];if(!available.length||start<available[0].date||start>available.at(-1).date)return null;const bars=available.filter(x=>x.date>=start);if(!bars.length)return null;
  const buy=bars[0],qty=Math.floor(amount/buy.close),leftover=amount-qty*buy.close;
  let shares=qty,cash=leftover,dividendCash=0,receivable=0,divGross=0,splitIndex=0,divIndex=0;
  const divs=mode==='price'?[]:cache.dividends[code].events.slice().sort((a,b)=>a.exDate.localeCompare(b.exDate));
