@@ -8,7 +8,9 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '30 12 * * 1-5'  # 20:30 Taiwan (UTC+8)
+    # GitHub Actions uses UTC: 15:00 and 20:30 Taiwan time (UTC+8). The evening run retries after close data publication delays.
+    - cron: '0 7 * * 1-5'   # 15:00 Taiwan
+    - cron: '30 12 * * 1-5' # 20:30 Taiwan
 permissions:
   contents: write
 concurrency:
