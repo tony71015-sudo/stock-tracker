@@ -15,6 +15,7 @@ jobs:
         with:
           ref: main
       - run: python scripts/update_margin_balance.py
+      - run: python scripts/build_margin_ratios.py
       - run: |
           git config user.name github-actions
           git config user.email github-actions@users.noreply.github.com
