@@ -38,7 +38,7 @@ def parse_date(value):
 
 def parse_amount(value):
     text = re.sub(r'<[^>]+>', '', str(value or '')).replace(',', '').strip()
-    if not re.fullmatch(r'\d+(?:\\.\d+)?', text):
+    if not re.fullmatch(r'\d+(?:\.\d+)?', text):
         return None
     amount = float(text)
     return amount if 0 < amount < 10000 else None
