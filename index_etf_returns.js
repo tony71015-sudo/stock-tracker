@@ -257,12 +257,71 @@ function chart(series,fund){if(series.length<2)return '<p class="fine">至少需
   +(fund==='0050'?'<p class="fine">橘色虛線為 0050 於 2025-06-18 的 1 拆 4 分割日。上圖使用未還原原始收盤價，因此會出現價格斷層；下圖已按分割後持股增加調整，不應將分割價格落差視為實際虧損。</p>':'');
 }
 const metric=(label,val)=>`<div class="panel metric" style="padding:14px"><div class="metric-label">${esc(label)}</div><div class="metric-value" style="font-size:20px">${esc(val)}</div></div>`;
+
+const PROJ_KEY='trade-compass-index-etf-projection-v1';
+function projectionConfig(fund){
+ let all={};try{all=JSON.parse(localStorage.getItem(PROJ_KEY)||'{}')||{};}catch{}
+ const x=all[fund]||{};
+ return {initial:Math.max(0,Number(x.initial??100000)),monthly:Math.max(0,Number(x.monthly??3000)),annual:Math.max(0,Number(x.annual??0)),years:Math.max(1,Math.min(40,Number(x.years??40))),reinvest:x.reinvest!==false};
+}
+function projectionScenario(cfg,rate){
+ const monthlyRate=Math.pow(1+rate,1/12)-1;
+ let principal=cfg.initial,portfolio=cfg.initial,cashReturns=0;
+ const rows=[{year:0,capital:principal,assets:portfolio,profit:0}];
+ for(let month=1;month<=cfg.years*12;month++){
+  if(cfg.reinvest)portfolio*=1+monthlyRate;
+  else cashReturns+=principal*monthlyRate;
+  principal+=cfg.monthly;
+  if(cfg.reinvest)portfolio+=cfg.monthly;
+  if(month%12===0){
+   principal+=cfg.annual;
+   if(cfg.reinvest)portfolio+=cfg.annual;
+   if(!cfg.reinvest)cashReturns+=0;
+   const assets=cfg.reinvest?portfolio:principal+cashReturns;
+   rows.push({year:month/12,capital:principal,assets,profit:assets-principal});
+  }
+ }
+ return rows;
+}
+function projectionPanel(prices,fund){
+ const cfg=projectionConfig(fund),rates=[.03,.07,.10],series=rates.map(rate=>projectionScenario(cfg,rate));
+ const colors=['#2563eb','#0d9488','#ea580c'],labels=['保守 3%','中性 7%','較高 10%'];
+ const width=900,height=300,left=94,right=24,top=34,bottom=58,pw=width-left-right,ph=height-top-bottom;
+ const maxProfit=Math.max(1,...series.flatMap(a=>a.map(x=>x.profit))),minProfit=Math.min(0,...series.flatMap(a=>a.map(x=>x.profit)));
+ const y=v=>top+(maxProfit-v)*ph/(maxProfit-minProfit||1),x=i=>left+i*pw/cfg.years;
+ let svg='<svg viewBox="0 0 '+width+' '+height+'" role="img" aria-label="依年數比較三種年化總報酬率的預估累積獲利金額" style="width:100%;min-width:560px">';
+ for(let j=0;j<=4;j++){const v=minProfit+(maxProfit-minProfit)*j/4,yy=y(v);svg+='<line x1="'+left+'" x2="'+(width-right)+'" y1="'+yy.toFixed(1)+'" y2="'+yy.toFixed(1)+'" stroke="currentColor" stroke-opacity=".13"/><text x="'+(left-8)+'" y="'+(yy+4).toFixed(1)+'" text-anchor="end" font-size="11" fill="currentColor">'+esc(num(v,0))+'</text>';}
+ const ticks=[...new Set([0,Math.max(1,Math.round(cfg.years/4)),Math.max(1,Math.round(cfg.years/2)),Math.max(1,Math.round(cfg.years*3/4)),cfg.years])];
+ ticks.forEach(year=>{const xx=x(year);svg+='<text x="'+xx.toFixed(1)+'" y="'+(height-35)+'" text-anchor="middle" font-size="11" fill="currentColor">'+year+' 年</text>';});
+ series.forEach((rows,k)=>{const pts=rows.slice(1).map(r=>x(r.year).toFixed(2)+','+y(r.profit).toFixed(2)).join(' ');if(pts)svg+='<polyline fill="none" stroke="'+colors[k]+'" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="'+pts+'"/>';rows.slice(1).forEach(r=>{svg+='<circle cx="'+x(r.year).toFixed(2)+'" cy="'+y(r.profit).toFixed(2)+'" r="2.8" fill="'+colors[k]+'"><title>'+r.year+' 年｜'+labels[k]+'｜預估獲利 '+num(r.profit,0)+' 元｜投入 '+num(r.capital,0)+' 元｜資產 '+num(r.assets,0)+' 元</title></circle>';});});
+ svg+='<text x="'+(left+pw/2)+'" y="'+(height-7)+'" text-anchor="middle" font-size="11" fill="currentColor">投資期間（年）</text></svg>';
+ const marks=[1,3,5,7,10,15,20,30,40].filter(y=>y<=cfg.years);
+ if(!marks.includes(cfg.years))marks.push(cfg.years);
+ const tableRows=marks.map(year=>{const row=series.map(s=>s[year]);return '<tr><td>'+year+' 年</td><td class="num">'+num(row[1].capital,0)+'</td><td class="num">'+sgn(row[0].profit,0)+'</td><td class="num">'+sgn(row[1].profit,0)+'</td><td class="num">'+sgn(row[2].profit,0)+'</td></tr>';}).join('');
+ const latest=prices?.at(-1);
+ let out='<details open style="margin:18px 0;padding:16px;border:1px solid #dce8eb;border-radius:14px;background:#f9fcfc"><summary style="cursor:pointer;font-size:16px;font-weight:850">快速情境試算｜設定投入方式，看不同年數的預估獲利</summary>';
+ out+='<p class="fine">先輸入起始金額、每月投入與每年加碼；折線直接比較 3%、7%、10% 三種年化總報酬假設。這是情境估算，不是報酬保證。</p>';
+ out+='<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin:14px 0">';
+ out+='<label class="panel" style="padding:12px">① 起始投入（元）<input id="idxProjInitial" type="number" min="0" step="1000" class="field" style="display:block;width:100%;margin-top:7px" value="'+cfg.initial+'"></label>';
+ out+='<label class="panel" style="padding:12px">② 每月投入（元）<input id="idxProjMonthly" type="number" min="0" step="500" class="field" style="display:block;width:100%;margin-top:7px" value="'+cfg.monthly+'"></label>';
+ out+='<label class="panel" style="padding:12px">③ 每年額外加碼（元）<input id="idxProjAnnual" type="number" min="0" step="1000" class="field" style="display:block;width:100%;margin-top:7px" value="'+cfg.annual+'"></label>';
+ out+='<label class="panel" style="padding:12px">④ 試算年數（1–40 年）<input id="idxProjYears" type="number" min="1" max="40" step="1" class="field" style="display:block;width:100%;margin-top:7px" value="'+cfg.years+'"></label></div>';
+ out+='<label style="display:inline-flex;align-items:center;gap:8px;margin:2px 0 12px"><input id="idxProjReinvest" type="checkbox" '+(cfg.reinvest?'checked':'')+'> 將投資收益再投入，採複利估算</label> ';
+ out+='<button id="idxProjectionRun" class="btn primary">更新情境圖表</button>';
+ out+='<p class="fine">複利勾選時，假設收益持續再投入；取消時，收益留作現金，不再產生後續報酬。每月投入於月末加入、年度加碼於年末加入。年化報酬率視為總報酬假設，已包含配息影響；實際配息與 0050 分割則在下方歷史試算中依事件計算。';
+ if(latest)out+=' 目前 '+esc(fund)+' 最近收盤 '+num(Number(latest.close),2)+' 元（'+esc(latest.date)+'），僅供價格參考。';
+ out+='</p><div style="display:flex;flex-wrap:wrap;gap:12px;margin:12px 0">'+labels.map((t,i)=>'<span><b style="color:'+colors[i]+'">━</b> '+t+' 年化總報酬</span>').join('')+'</div><div style="overflow-x:auto">'+svg+'</div>';
+ out+='<div class="table-wrap"><table class="data-table"><thead><tr><th>期間</th><th class="num">累積投入本金</th><th class="num">獲利｜3%</th><th class="num">獲利｜7%</th><th class="num">獲利｜10%</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>';
+ out+='<p class="fine">圖線與表格顯示「資產總值－累積投入本金」的預估獲利金額。未計通膨、稅費、交易成本，也不代表未來實際走勢。</p></details>';
+ return out;
+}
+
 function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pending[fund]&&(!pricesCache[fund]||!dividendsCache[fund])&&!errors[fund+'_div'])Promise.resolve().then(()=>load(fund));
  const official=pricesCache[fund]||[],prices=mergeLocalPrices(fund,official),dfile=effectiveDividends(fund),ls=lots(fund),fee=Number(store[fund+'_fee']||0),dca=store[fund+'_dca']||{},recurring=monthSchedule(dca),gaps=missingMonths(prices,fund);
  let mode=store[fund+'_mode']||'price';if(!['price','cash','reinvest'].includes(mode))mode='price';
  const blocked=mode!=='price'&&!dfile;const usedMode=blocked?'price':mode;const calc=prices.length?compute(prices,[...ls,...recurring],{fund,feePct:fee,mode:usedMode,dividends:dfile?.events||[]}):null;const cur=calc?.latest;
  let h=`<section class="panel" style="margin-top:18px;padding:20px 23px" id="indexETFReturns"><h2 class="panel-title">指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）</h2><p class="subtitle">${esc(fund)}｜可多次加碼；買入日期以當日或其後第一個可得交易日<strong>收盤價</strong>估算。所有試算保存在本機。</p>
- <div class="filter-row" style="margin:12px 0"><label>報酬計算</label><select id="idxReturnMode" class="field"><option value="price" ${mode==='price'?'selected':''}>純價格報酬</option><option value="cash" ${mode==='cash'?'selected':''}>含息總報酬（股息留現金）</option><option value="reinvest" ${mode==='reinvest'?'selected':''}>含息總報酬（股息再投入）</option></select><label>投入／加碼日期</label><input id="idxReturnDate" type="date" class="field"/><label>加碼預算（元）</label><input id="idxReturnAmount" type="number" min="1" step="1" class="field" placeholder="例：10000"/><button id="idxReturnAdd" class="btn primary">新增投入／加碼</button><label>買入手續費（%）</label><input id="idxReturnFee" type="number" min="0" max="5" step="0.0001" class="field" style="width:106px" value="${fee}"/></div>
+ ${projectionPanel(prices,fund)}<div class="filter-row" style="margin:12px 0"><label>報酬計算</label><select id="idxReturnMode" class="field"><option value="price" ${mode==='price'?'selected':''}>純價格報酬</option><option value="cash" ${mode==='cash'?'selected':''}>含息總報酬（股息留現金）</option><option value="reinvest" ${mode==='reinvest'?'selected':''}>含息總報酬（股息再投入）</option></select><label>投入／加碼日期</label><input id="idxReturnDate" type="date" class="field"/><label>加碼預算（元）</label><input id="idxReturnAmount" type="number" min="1" step="1" class="field" placeholder="例：10000"/><button id="idxReturnAdd" class="btn primary">新增投入／加碼</button><label>買入手續費（%）</label><input id="idxReturnFee" type="number" min="0" max="5" step="0.0001" class="field" style="width:106px" value="${fee}"/></div>
  <details style="margin:10px 0" open><summary><strong>每月定期定額（可與單筆加碼合併）</strong></summary>
  <div class="filter-row" style="margin-top:12px"><label>每月金額（元）</label><input id="idxDcaAmount" type="number" min="1" class="field" style="width:130px" placeholder="例：3000" value="${esc(dca.amount||'')}"/><label>每月扣款日</label><input id="idxDcaDay" type="number" min="1" max="31" class="field" style="width:77px" value="${esc(dca.day||1)}"/><label>開始日期</label><input id="idxDcaFrom" type="date" class="field" value="${esc(dca.from||'')}"/><label>結束日期</label><input id="idxDcaTo" type="date" class="field" value="${esc(dca.to||'')}"/><button id="idxDcaSave" class="btn primary">儲存定期定額</button><button id="idxDcaClear" class="btn">停用</button></div>
  <p class="fine">預計扣款 ${recurring.length} 筆；非交易日順延至其後第一個有報價交易日，若晚於預定日期超過 10 天則跳過並提示缺漏；實際買入以該日收盤價估算。</p></details>
@@ -298,6 +357,12 @@ function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pendi
  h+=`<div class="note-box mt16"><strong>計算說明：</strong>0050 於 2025-06-18 進行 1 拆 4；分割增加股數並相應降低每股成本，<strong>不增加投入本金</strong>。股息依除息日前持股認列應收，發放後留存現金或在發放日後第一個有價交易日收盤價模擬再投入；未滿一股的餘額保留現金。配息再投入不屬於額外加碼。XIRR 以真正投入資金及期末資產計算。股價／配息源自公開資料，可能有漏日；0050 的 2003～2004 年官方歷史分配資料未在目前查詢來源內完整驗證；006208 自上市後亦須核對資料來源的涵蓋期間，缺漏時不得將 0 元視為完整。未計賣出交易稅、滑價、股息稅負及其他費用。非交易建議。</div></section>`;
  return h;}
 document.addEventListener('click',e=>{if(!window.TradeCompassBridge?.isPage?.('indexETF'))return;const b=e.target.closest?.('button');if(!b)return;
+ if(b.id==='idxProjectionRun'){
+  const initial=Number(document.getElementById('idxProjInitial')?.value),monthly=Number(document.getElementById('idxProjMonthly')?.value),annual=Number(document.getElementById('idxProjAnnual')?.value),years=Number(document.getElementById('idxProjYears')?.value),reinvest=!!document.getElementById('idxProjReinvest')?.checked;
+  if(![initial,monthly,annual].every(v=>Number.isFinite(v)&&v>=0&&v<=1e12)||!Number.isInteger(years)||years<1||years>40){alert('請輸入 0 至 1,000,000,000,000 元的投入金額，試算年數需為 1 至 40 年');return;}
+  let all={};try{all=JSON.parse(localStorage.getItem(PROJ_KEY)||'{}')||{};}catch{}
+  all[activeFund]={initial,monthly,annual,years,reinvest};localStorage.setItem(PROJ_KEY,JSON.stringify(all));refresh();return;
+ }
  if(b.id==='idxDcaSave'){
   const amount=Number(document.getElementById('idxDcaAmount')?.value),day=Number(document.getElementById('idxDcaDay')?.value),from=document.getElementById('idxDcaFrom')?.value,to=document.getElementById('idxDcaTo')?.value;
   if(!(amount>0)||!(day>=1&&day<=31)||!dateValid(from)||!dateValid(to)||from>to){alert('請檢查每月金額、扣款日（1～31）與起訖日期');return;}
