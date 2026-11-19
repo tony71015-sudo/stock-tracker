@@ -497,7 +497,15 @@ async function showPageDates(page,box){
  if(fixed[page])notes.push(fixed[page]);
  if(page==='institutions'||page==='stockSearch'){
  const obj=await archiveForDates(page==='institutions'?'institutional/status':'market/latest');
- for(const [key,label] of [['TWSE','上市'],['TPEX','上櫃']])notes.push(label+'資料日 '+((page==='institutions'?obj.latest?.[key]:obj.markets?.[key]?.date)||'日期未提供'));
+ const clock=t=>t&&Number.isFinite(Date.parse(t))?new Date(t).toLocaleString('zh-TW',{timeZone:'Asia/Taipei',hour12:false}):'尚無紀錄';
+ const taipeiToday=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Taipei'}).format(new Date());
+ for(const [key,label] of [['TWSE','上市'],['TPEX','上櫃']]){
+  const market=obj.markets?.[key],day=obj.latest?.[key]||market?.date;
+  notes.push(label+'資料日 '+(day||'未提供')+(day&&day<taipeiToday?'（前一日期資料）':'')+(page==='stockSearch'?'｜最近成功取得股價 '+clock(market?.priceFetchedAt)+(market?.retained?'（本次沿用舊行情）':''):''));
+ }
+ notes.push((page==='stockSearch'?'行情檔產生時間 ':'後台最近嘗試時間 ')+clock(obj.generatedAt||obj.attemptedAt));
+ notes.push('台灣時間｜週一至週五預定抓取 14:35、15:00、15:35、16:20、20:35、22:35，發布時間依官方資料及排程進度而定');
+ box.style.whiteSpace='pre-line';box.style.lineHeight='1.8';box.textContent=notes.join('\n');return;
  }
  if(page==='activeETF'){
  const obj=await archiveForDates('active-etf/status');
