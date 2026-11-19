@@ -1,6 +1,9 @@
 name: 更新其他台股主動式ETF持股並發布網站（來源不足標示無法比較）
 
 on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/update-other-active-etfs.yml"]
   schedule:
     # 21:55 Asia/Taipei weekdays. Collector generally offers T+1 for some issuers.
     - cron: '55 13 * * 1-5'
@@ -144,9 +147,9 @@ jobs:
       - name: Stage public site
         run: |
           mkdir -p _site/data
-          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js index_etf_returns.js tools.css _site/
+          cp index.html institutional.js institutional.css etf_simulator.js market.js active_etf.js index_etf.js index_etf_returns.js historical_crash.js tools.css _site/
           # Optional datasets do not exist before the first successful fetch.
-          for dataset in institutional market active-etf index-etf; do
+          for dataset in institutional market active-etf index-etf history; do
             if [ -d "data/$dataset" ]; then
               cp -R "data/$dataset" "_site/data/$dataset"
             else
