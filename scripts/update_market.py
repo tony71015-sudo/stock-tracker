@@ -188,7 +188,8 @@ def update():
             if d>dt.date.today().isoformat():raise ValueError('Unexpected future date: '+d)
             # Prevent backward rollback if an official API is delayed.
             prev=old.get('markets',{}).get(m,{}).get('date')
-            if prev and d<prev and old_items[m]:
+            retained = bool(prev and d<prev and old_items[m])
+            if retained:
                 warnings.append(f'{m}: API date {d} is older than published {prev}, retained previous validated snapshot')
                 records=old_items[m];d=prev
             dates[m]=d
@@ -203,11 +204,14 @@ def update():
                         x['daytradeShares']=amt
                 if not daytrade:warnings.append(m+': official day-trading volume columns not validated; displaying N/A')
             except Exception as e:warnings.append(m+': day-trading API unavailable ('+str(e)[:100]+')')
-            items+=records;status[m]={'date':d,'count':len(records),'source':SOURCES[m.lower()]}
+            items+=records;status[m]={'date':d,'count':len(records),'source':SOURCES[m.lower()],
+                'priceFetchedAt':old.get('markets',{}).get(m,{}).get('priceFetchedAt') if retained else dt.datetime.now(dt.timezone.utc).isoformat(),
+                'retained':retained}
         except Exception as e:
             warnings.append(f'{m}: unable to refresh: {e}')
             items+=old_items[m]
             status[m]=old.get('markets',{}).get(m,{'date':None,'count':0,'source':SOURCES[m.lower()]})
+            status[m]={**status[m], 'retained':True}
     obj={'schema':1,'generatedAt':dt.datetime.now(dt.timezone.utc).isoformat(),'markets':status,'items':items,'warnings':warnings,'sources':SOURCES}
     DEST.parent.mkdir(parents=True,exist_ok=True)
     # Atomic replace prevents interrupted GitHub runner writes from publishing half a JSON string.
