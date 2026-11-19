@@ -22,9 +22,9 @@ HISTORY_START = {'0050': '2005-01-01', '006208': '2012-07-17'}
 def parse_date(value):
     text = re.sub(r'<[^>]+>', '', str(value or '')).strip()
     # TWSE responses may use either Gregorian or ROC calendar notation.
-    match = re.search(r'(\\d{2,4})[/-](\\d{1,2})[/-](\\d{1,2})', text)
+    match = re.search(r'(\d{2,4})[/-](\d{1,2})[/-](\d{1,2})', text)
     if not match:
-        match = re.search(r'(\\d{2,4})年(\\d{1,2})月(\\d{1,2})日?', text)
+        match = re.search(r'(\d{2,4})年(\d{1,2})月(\d{1,2})日?', text)
     if not match:
         return None
     year, month, day = map(int, match.groups())
@@ -38,7 +38,7 @@ def parse_date(value):
 
 def parse_amount(value):
     text = re.sub(r'<[^>]+>', '', str(value or '')).replace(',', '').strip()
-    if not re.fullmatch(r'\\d+(?:\\.\\d+)?', text):
+    if not re.fullmatch(r'\d+(?:\\.\d+)?', text):
         return None
     amount = float(text)
     return amount if 0 < amount < 10000 else None
