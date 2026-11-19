@@ -115,6 +115,7 @@ global.TradeCompassETFCache={getSnapshot,putSnapshot,getManifest,putManifest,sta
       <button class="nav-btn" data-page="stockSearch"><span class="nav-ico">⌕</span> 昨日收盤價行情查詢</button>
       <button class="nav-btn" data-page="activeETF"><span class="nav-ico">◈</span> 主動式 ETF 持股異動</button>
       <button class="nav-btn" data-page="indexETF"><span class="nav-ico">▥</span> 指數型 ETF 報酬試算</button>
+      <button class="nav-btn" data-page="margin"><span class="nav-ico">▤</span> 上市融資查詢</button>
       <button class="nav-btn" data-page="historyCrash"><span class="nav-ico">◉</span> 歷史股災回顧區</button>
       <button class="nav-btn" data-page="tracking"><span class="nav-ico">⌁</span> 價格追蹤</button>
       <button class="nav-btn" data-page="settings"><span class="nav-ico">⚙</span> 策略設定</button>
@@ -310,7 +311,29 @@ function save(){try{localStorage.setItem(STORAGE,JSON.stringify(db));persisted=t
 function notify(msg){const el=$('#toast');if(!el)return;el.textContent=msg;el.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),3400);}
 const nameOf=s=>{const recent=[...db.transactions].reverse().find(t=>t.symbol===s&&t.name);return recent?.name||s;};
 const holdings=()=>C.totals(db.transactions,db.quotes,asOf,db.settings,db.manualPrices);
-function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'昨日收盤價行情查詢',activeETF:'主動式 ETF 持股異動',indexETF:'指數型 ETF 報酬試算',historyCrash:'歷史股災回顧區'})[active];}
+function marginPage(){
+ return '<section class="panel" style="padding:24px"><h2>上市融資查詢</h2><p>查詢大盤融資金額，或輸入上市股票代號查看融資交易單位。</p><label>股票代號 <input class="field" id="marginCode" placeholder="留白查大盤"></label> <label>交易日 <select class="field" id="marginWindow">'+[10,20,60,180,240].map(n=>'<option>'+n+'</option>').join('')+'</select></label> <button class="btn primary" id="marginRead">查詢</button><p>實際斷頭戶數、處分金額與斷頭比：證交所融資餘額日報未揭露。</p><div id="marginResults" aria-live="polite"></div></section>';
+}
+document.addEventListener('click',async e=>{
+ if(!e.target.closest('#marginRead'))return;
+ const box=document.getElementById('marginResults'),code=document.getElementById('marginCode').value.trim().toUpperCase(),count=Number(document.getElementById('marginWindow').value);
+ const root='https://raw.githubusercontent.com/tony71015-sudo/stock-tracker/main/data/margin/';
+ const get=async path=>{const response=await fetch(root+path+'.json',{cache:'no-cache'});if(!response.ok)throw Error();return response.json()};
+ const token=Symbol();box.queryToken=token;box.textContent='讀取歷史報表中…';
+ try{
+ const index=await get('index'),dates=index.dates.slice(-count).reverse(),body=[];
+ for(let i=0;i<dates.length;i+=8){
+ if(box.queryToken!==token||!box.isConnected)return;
+ body.push(...await Promise.all(dates.slice(i,i+8).map(async day=>{
+ const d=await get(day),r=code?d.stocks[code]:d.market;
+ const fmt=x=>code?x.toLocaleString('zh-TW'):(x/100000).toFixed(2);
+ return '<tr><td>'+day+'</td>'+(r?[r[4],r[4]-r[3],r[0],r[1],r[2]].map(x=>'<td>'+fmt(x)+'</td>').join(''):'<td colspan="5">當日無此代號資料</td>')+'</tr>';
+ })));
+ }
+ if(box.queryToken===token)box.innerHTML='<p>最新資料日 '+dates[0]+'｜後台更新 '+new Date(index.checked).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})+'｜共 '+dates.length+' 個交易日｜單位：'+(code?'交易單位':'億元')+'</p><div class="table-wrap"><table class="data-table"><thead><tr><th>日期</th><th>融資餘額</th><th>較前日增減</th><th>融資買進</th><th>融資賣出</th><th>現金償還</th></tr></thead><tbody>'+body.join('')+'</tbody></table></div>';
+ }catch{if(box.queryToken===token)box.textContent='融資歷史檔尚未發布或讀取失敗，請稍後重試。'}
+});
+function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'昨日收盤價行情查詢',activeETF:'主動式 ETF 持股異動',indexETF:'指數型 ETF 報酬試算',margin:'上市融資查詢',historyCrash:'歷史股災回顧區'})[active];}
 function head(eyebrow,title,sub,buttons='') {return `<div class="head"><div><div class="eyebrow">${eyebrow}</div><h1>${title}</h1><p class="subtitle">${sub}</p></div><div class="actions">${buttons}</div></div>`;}
 function pill(status){if(status.includes('觸及'))return `<span class="tag red">● ${E(status)}</span>`;if(status==='移動停利中')return `<span class="tag mint">● 移動停利中</span>`;if(status==='未啟動')return `<span class="tag gold">○ 未啟動</span>`;return `<span class="tag slate">${E(status||'—')}</span>`;}
 function empty(title,desc,action=''){return `<div class="empty-hero"><div class="empty-icon">⌁</div><h3>${title}</h3><p>${desc}</p>${action}</div>`;}
@@ -493,7 +516,7 @@ async function showPageDates(page,box){
  if(['transactions','overview','data'].includes(page))notes.push('最近交易日 '+latest(db.transactions));
  if(['tracking','overview','data'].includes(page))notes.push('最近行情紀錄 '+latest([...(db.quotes||[]),...(db.manualPrices||[]),...(db.intradayPrices||[])]));
  if(page==='data')notes.push('最近備份 '+(db.lastBackupAt?new Date(db.lastBackupAt).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'}):'尚無紀錄'));
- const fixed={settings:'策略設定依本機儲存內容',cathay:'依輸入金額與費率即時計算',etfSim:'依投入金額與報酬率假設即時計算',about:'網站使用說明'};
+ const fixed={margin:'證交所 MI_MARGN｜每日台灣時間 21:01 預定更新',settings:'策略設定依本機儲存內容',cathay:'依輸入金額與費率即時計算',etfSim:'依投入金額與報酬率假設即時計算',about:'網站使用說明'};
  if(fixed[page])notes.push(fixed[page]);
  if(page==='institutions'||page==='stockSearch'){
  const obj=await archiveForDates(page==='institutions'?'institutional/status':'market/latest');
@@ -520,7 +543,7 @@ async function showPageDates(page,box){
  }
  box.textContent=notes.join('　｜　')||'資料日期未提供';
 }
-function render(){const idmap={overview:'overview',transactions:'transactions',tracking:'tracking',settings:'settings',data:'data',cathay:'cathay',about:'about',institutions:'institutions',etfSim:'etfSim',stockSearch:'stockSearch',activeETF:'activeETF',indexETF:'指數型 ETF 報酬試算',historyCrash:'歷史股災回顧區'};document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===active);b.setAttribute('aria-current',b.dataset.page===active?'page':'false');});$('#breadcrumbCurrent').textContent=navTitle();const main=$('#main');main.innerHTML=({overview,transactions,tracking,settings,data:dataPage,cathay:cathayPage,about:aboutPage,institutions:()=>window.TradeCompassInstitutional?.html()||'<div class="inst-loading">載入法人查詢模組中…</div>',etfSim:()=>window.TradeCompassETF?.html()||'ETF 試算模組載入中…',stockSearch:()=>window.TradeCompassMarket?.html()||'行情查詢模組載入中…',activeETF:()=>window.TradeCompassActiveETF?.html()||'主動 ETF 模組載入中…',indexETF:()=>window.TradeCompassIndexETF?.html()||'指數型 ETF 模組載入中…',historyCrash:()=>window.TradeCompassHistoricalCrash?.html()||'歷史股災模組載入中…'})[active]();const dateBox=document.createElement("p");dateBox.className="fine";main.prepend(dateBox);dateBox.textContent="讀取資料日期中…";showPageDates(active,dateBox).catch(()=>{dateBox.textContent="資料日期未提供"});document.title=`${navTitle()}｜移動停利停損管理`;}
+function render(){const idmap={overview:'overview',transactions:'transactions',tracking:'tracking',settings:'settings',data:'data',cathay:'cathay',about:'about',institutions:'institutions',etfSim:'etfSim',stockSearch:'stockSearch',activeETF:'activeETF',indexETF:'指數型 ETF 報酬試算',margin:'上市融資查詢',historyCrash:'歷史股災回顧區'};document.querySelectorAll('[data-page]').forEach(b=>{b.classList.toggle('active',b.dataset.page===active);b.setAttribute('aria-current',b.dataset.page===active?'page':'false');});$('#breadcrumbCurrent').textContent=navTitle();const main=$('#main');main.innerHTML=({overview,transactions,tracking,settings,data:dataPage,cathay:cathayPage,about:aboutPage,institutions:()=>window.TradeCompassInstitutional?.html()||'<div class="inst-loading">載入法人查詢模組中…</div>',etfSim:()=>window.TradeCompassETF?.html()||'ETF 試算模組載入中…',stockSearch:()=>window.TradeCompassMarket?.html()||'行情查詢模組載入中…',activeETF:()=>window.TradeCompassActiveETF?.html()||'主動 ETF 模組載入中…',indexETF:()=>window.TradeCompassIndexETF?.html()||'指數型 ETF 模組載入中…',margin:marginPage,historyCrash:()=>window.TradeCompassHistoricalCrash?.html()||'歷史股災模組載入中…'})[active]();const dateBox=document.createElement("p");dateBox.className="fine";main.prepend(dateBox);dateBox.textContent="讀取資料日期中…";showPageDates(active,dateBox).catch(()=>{dateBox.textContent="資料日期未提供"});document.title=`${navTitle()}｜移動停利停損管理`;}
 function openModal(kind,item=null){editing={kind,id:item?.id||null};const trade=kind==='trade';const v=item||{};const heading=trade?(item?'編輯交易紀錄':'新增交易紀錄'):(item?'編輯每日行情':'新增每日行情');
  const fields=trade?`<div class="form-group"><label for="mdate">成交日期 *</label><input id="mdate" type="date" class="field" required value="${E(v.date||today())}" /></div><div class="form-group"><label for="msymbol">股票代號 *</label><input id="msymbol" class="field" maxlength="20" placeholder="例如 0050" required value="${E(v.symbol||'')}" /></div><div class="form-group"><label for="mname">股票名稱（選填）</label><input id="mname" class="field" maxlength="60" placeholder="例如 元大台灣50" value="${E(v.name||'')}" /></div><div class="form-group"><label for="mside">方向 *</label><select class="field" id="mside"><option value="buy" ${v.side!=='sell'?'selected':''}>買進／加碼</option><option value="sell" ${v.side==='sell'?'selected':''}>賣出／減碼</option></select></div><div class="form-group"><label for="mshares">成交股數 *</label><input id="mshares" type="number" class="field" min="0.000001" step="any" required placeholder="100" value="${v.shares??''}" /></div><div class="form-group"><label for="mprice">每股成交價 *</label><input id="mprice" type="number" class="field" min="0.000001" step="any" required placeholder="100.00" value="${v.price??''}" /></div><div class="form-group"><label for="mfee">手續費（元）</label><input id="mfee" type="number" class="field" min="0" step="any" value="${v.fee??0}" /></div><div class="form-group"><label for="mtax">交易稅（元）</label><input id="mtax" type="number" class="field" min="0" step="any" value="${v.tax??0}" /></div><div class="form-group full"><label for="mnote">備註（選填）</label><input id="mnote" class="field" maxlength="200" placeholder="例如 回檔加碼" value="${E(v.note||'')}" /></div>`
  :`<div class="form-group"><label for="mdate">追蹤日期 *</label><input id="mdate" class="field" type="date" required value="${E(v.date||today())}" /></div><div class="form-group"><label for="msymbol">股票代號 *</label><input id="msymbol" class="field" maxlength="20" placeholder="例如 0050" required value="${E(v.symbol||stockFilter||'')}" /></div><div class="form-group"><label for="mhigh">當日最高價 *</label><input id="mhigh" type="number" class="field" min="0.000001" step="any" required value="${v.high??''}" /></div><div class="form-group"><label for="mlow">當日最低價 *</label><input id="mlow" type="number" class="field" min="0.000001" step="any" required value="${v.low??''}" /></div><div class="form-group full"><label for="mclose">當日收盤價（選填）</label><input id="mclose" type="number" class="field" min="0.000001" step="any" value="${v.close??''}" /></div>`;
