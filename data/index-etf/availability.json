@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updatedAt": "2026-11-18T21:19:17.509723+00:00",
+  "updatedAt": "2026-11-19T21:22:17.534900+00:00",
   "funds": {
     "0050": {
       "name": "元大台灣50",
@@ -9,16 +9,17 @@
         "2026-11-13",
         "2026-11-16",
         "2026-11-17",
-        "2026-11-18"
+        "2026-11-18",
+        "2026-11-19"
       ],
-      "verifiedPortfolioCount": 4,
-      "portfolioLatest": "2026-11-18",
-      "indexDatesListed": 4,
+      "verifiedPortfolioCount": 5,
+      "portfolioLatest": "2026-11-19",
+      "indexDatesListed": 5,
       "priceFileExists": true,
-      "priceRowCountIfRowsSchema": 4130,
+      "priceRowCountIfRowsSchema": 4131,
       "dividendPolicy": "distributes",
-      "dividendFileExists": false,
-      "dividendEventCount": null,
+      "dividendFileExists": true,
+      "dividendEventCount": 32,
       "notes": "有日期索引仍需有效的實際持股檔；成分股法人交易不可當成基金交易。"
     },
     "006208": {
@@ -39,16 +40,17 @@
         "2026-11-13",
         "2026-11-16",
         "2026-11-17",
-        "2026-11-18"
+        "2026-11-18",
+        "2026-11-19"
       ],
-      "verifiedPortfolioCount": 15,
-      "portfolioLatest": "2026-11-18",
-      "indexDatesListed": 15,
+      "verifiedPortfolioCount": 16,
+      "portfolioLatest": "2026-11-19",
+      "indexDatesListed": 16,
       "priceFileExists": true,
-      "priceRowCountIfRowsSchema": 3307,
+      "priceRowCountIfRowsSchema": 3308,
       "dividendPolicy": "distributes",
       "dividendFileExists": true,
-      "dividendEventCount": 24,
+      "dividendEventCount": 25,
       "notes": "有日期索引仍需有效的實際持股檔；成分股法人交易不可當成基金交易。"
     },
     "009816": {
@@ -58,13 +60,14 @@
         "2026-11-13",
         "2026-11-16",
         "2026-11-17",
-        "2026-11-18"
+        "2026-11-18",
+        "2026-11-19"
       ],
-      "verifiedPortfolioCount": 4,
-      "portfolioLatest": "2026-11-18",
-      "indexDatesListed": 4,
+      "verifiedPortfolioCount": 5,
+      "portfolioLatest": "2026-11-19",
+      "indexDatesListed": 5,
       "priceFileExists": true,
-      "priceRowCountIfRowsSchema": 189,
+      "priceRowCountIfRowsSchema": 190,
       "dividendPolicy": "no_distribution",
       "dividendFileExists": true,
       "dividendEventCount": 0,
