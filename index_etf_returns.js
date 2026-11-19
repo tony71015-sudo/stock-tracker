@@ -317,12 +317,61 @@ function projectionPanel(prices,fund){
  return out;
 }
 
+
+function comparePanel(){
+ let out='<details id="idxComparePanel" style="margin:18px 0;padding:14px;border:1px solid #dce8eb;border-radius:14px"><summary style="cursor:pointer;font-size:15px;font-weight:850">同期間比較｜勾選 ETF，以相同日期與投入金額比較歷史結果</summary>';
+ out+='<p class="fine">共用上方的起始投入、每月投入與每年加碼金額；空白起始日代表使用所選 ETF 都有資料的最早共同交易日。若選入 009816，能比較的期間會從它上市後開始。</p>';
+ out+='<div class="filter-row" style="margin:10px 0"><label><input type="checkbox" data-idx-compare="0050" checked> 0050 元大台灣50</label><label><input type="checkbox" data-idx-compare="006208" checked> 006208 富邦台50</label><label><input type="checkbox" data-idx-compare="009816"> 009816 凱基台灣TOP50</label>';
+ out+='<label>報酬模式</label><select id="idxCompareMode" class="field"><option value="price">純價格損益（不含配息）</option><option value="cash">含息總報酬（股息留現金）</option><option value="reinvest">含息總報酬（股息再投入）</option></select>';
+ out+='<label>共同起始日</label><input id="idxCompareStart" type="date" class="field"><button id="idxCompareRun" class="btn primary">比較所選 ETF</button></div>';
+ out+='<div id="idxCompareResult" aria-live="polite"></div></details>';return out;
+}
+function compareChart(dates,results,codes){
+ const colors={'0050':'#0d9488','006208':'#2563eb','009816':'#ea580c'},W=900,H=310,L=98,R=25,T=32,B=52,PW=W-L-R,PH=H-T-B;
+ const rows=dates.map(date=>({date,values:codes.map(code=>results[code].map.get(date)).filter(Boolean)})).filter(x=>x.values.length===codes.length);
+ if(rows.length<2)return '<p class="fine">共同有效交易日不足，無法繪製比較線。</p>';
+ const vals=rows.flatMap(r=>r.values.map(v=>v.totalPnl)),lo=Math.min(0,...vals),hi=Math.max(1,...vals),y=v=>T+(hi-v)*PH/(hi-lo||1),x=i=>L+i*PW/(rows.length-1);
+ let out='<div style="overflow-x:auto"><svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="所選指數型 ETF 同日同額投入之歷史損益比較線圖" style="width:100%;min-width:560px">';
+ for(let j=0;j<=4;j++){const v=lo+(hi-lo)*j/4,yy=y(v);out+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+yy.toFixed(1)+'" y2="'+yy.toFixed(1)+'" stroke="currentColor" stroke-opacity=".13"/><text x="'+(L-8)+'" y="'+(yy+4).toFixed(1)+'" text-anchor="end" font-size="11" fill="currentColor">'+esc(num(v,0))+'</text>';}
+ const ticks=[...new Set([0,Math.floor((rows.length-1)/4),Math.floor((rows.length-1)/2),Math.floor(3*(rows.length-1)/4),rows.length-1])];
+ for(const i of ticks)out+='<text x="'+x(i).toFixed(1)+'" y="'+(H-25)+'" text-anchor="middle" font-size="11" fill="currentColor">'+esc(rows[i].date)+'</text>';
+ codes.forEach(code=>{const p=rows.map((r,i)=>x(i).toFixed(1)+','+y(r.values[codes.indexOf(code)].totalPnl).toFixed(1)).join(' ');out+='<polyline fill="none" stroke="'+colors[code]+'" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" points="'+p+'"/>';});
+ const step=Math.max(1,Math.floor(rows.length/240));
+ for(let i=0;i<rows.length;i+=step){const r=rows[i];codes.forEach((code,j)=>{const v=r.values[j];out+='<circle cx="'+x(i).toFixed(1)+'" cy="'+y(v.totalPnl).toFixed(1)+'" r="2.7" fill="'+colors[code]+'"><title>'+esc(code)+'｜'+esc(r.date)+'｜投入 '+num(v.externalPaid,0)+' 元｜獲利 '+sgn(v.totalPnl,0)+' 元｜資產 '+num(v.totalAssets,0)+' 元</title></circle>';});}
+ out+='</svg></div><p class="fine">將滑鼠移到線上圓點可查看該日投入本金、獲利及資產總額。</p>';return out;
+}
+async function runIndexEtfComparison(codes,startInput,cfg,mode){
+ await Promise.all(codes.map(code=>load(code)));
+ const lists={};for(const code of codes){const p=mergeLocalPrices(code,pricesCache[code]||[]).filter(r=>r.close>0);if(!p.length)throw Error(code+' 沒有可用官方收盤價');lists[code]=p;}
+ let common=new Set(lists[codes[0]].map(x=>x.date));
+ for(const code of codes.slice(1)){const set=new Set(lists[code].map(x=>x.date));common=new Set([...common].filter(d=>set.has(d)));}
+ const dates=[...common].sort();if(dates.length<2)throw Error('所選 ETF 沒有足夠的共同收盤日期。');
+ const start=dates.find(d=>!startInput||d>=startInput);if(!start)throw Error('所選日期晚於共同行情範圍。');
+ const end=dates.at(-1);if(start>=end)throw Error('共同期間至少需要兩個交易日。');
+ if(mode!=='price'){const missing=codes.filter(code=>!effectiveDividends(code));if(missing.length)throw Error('以下 ETF 尚無可驗證的配息資料：'+missing.join('、')+'。請先選「純價格損益」，或取消缺資料的 ETF；不會把缺漏配息當成 0。');}
+ const day=Number(start.slice(8,10)),investments=[];
+ if(cfg.initial>0)investments.push({date:start,amount:cfg.initial,kind:'single'});
+ if(cfg.monthly>0)investments.push(...monthSchedule({amount:cfg.monthly,day,from:start,to:end}));
+ if(cfg.annual>0){const [sy,sm,sd]=start.split('-').map(Number);for(let n=1;n<=40;n++){const y=sy+n,last=new Date(Date.UTC(y,sm,0)).getUTCDate(),d=y+'-'+String(sm).padStart(2,'0')+'-'+String(Math.min(sd,last)).padStart(2,'0');if(d>end)break;if(d>=start)investments.push({date:d,amount:cfg.annual,kind:'single'});}}
+ if(!investments.length)throw Error('請至少設定起始投入、每月投入或每年加碼其中一項。');
+ const results={};
+ for(const code of codes){const prices=lists[code].filter(r=>r.date>=start&&r.date<=end),div=effectiveDividends(code);const calc=compute(prices,investments,{fund:code,feePct:Number(store[activeFund+'_fee']||0),mode,dividends:div?.events||[]});if(!calc?.series?.length)throw Error(code+' 無法依目前期間與投入條件計算。');results[code]={...calc,map:new Map(calc.series.map(x=>[x.date,x]))};}
+ const plotDates=dates.filter(d=>d>=start&&d<=end&&codes.every(code=>results[code].map.has(d)));
+ let out='<p class="fine">比較期間：'+esc(start)+' 至 '+esc(end)+'；各檔使用相同投入日期與金額，非交易日投入順延到其後第一個有價格的交易日。</p>';
+ out+=compareChart(plotDates,results,codes);
+ out+='<div class="table-wrap"><table class="data-table"><thead><tr><th>ETF</th><th class="num">累積投入</th><th class="num">期末資產</th><th class="num">累積獲利</th><th class="num">報酬率</th></tr></thead><tbody>';
+ for(const code of codes){const last=results[code].latest;out+='<tr><td>'+esc(code)+'</td><td class="num">'+num(last.externalPaid,0)+'</td><td class="num">'+num(last.totalAssets,0)+'</td><td class="num">'+sgn(last.totalPnl,0)+'</td><td class="num">'+sgn(last.pct,2)+'%</td></tr>';}
+ out+='</tbody></table></div>';
+ if(mode==='price'&&codes.includes('0050')&&!effectiveDividends('0050'))out+='<p class="alert">0050 配息檔目前仍缺漏；本次比較是「純價格損益」，沒有納入現金配息，不能視為完整總報酬比較。</p>';
+ return out;
+}
+
 function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pending[fund]&&(!pricesCache[fund]||!dividendsCache[fund])&&!errors[fund+'_div'])Promise.resolve().then(()=>load(fund));
  const official=pricesCache[fund]||[],prices=mergeLocalPrices(fund,official),dfile=effectiveDividends(fund),ls=lots(fund),fee=Number(store[fund+'_fee']||0),dca=store[fund+'_dca']||{},recurring=monthSchedule(dca),gaps=missingMonths(prices,fund);
  let mode=store[fund+'_mode']||'price';if(!['price','cash','reinvest'].includes(mode))mode='price';
  const blocked=mode!=='price'&&!dfile;const usedMode=blocked?'price':mode;const calc=prices.length?compute(prices,[...ls,...recurring],{fund,feePct:fee,mode:usedMode,dividends:dfile?.events||[]}):null;const cur=calc?.latest;
  let h=`<section class="panel" style="margin-top:18px;padding:20px 23px" id="indexETFReturns"><h2 class="panel-title">指數型 ETF 股價與投入報酬試算（含配息、分割、總收益）</h2><p class="subtitle">${esc(fund)}｜可多次加碼；買入日期以當日或其後第一個可得交易日<strong>收盤價</strong>估算。所有試算保存在本機。</p>
- ${projectionPanel(prices,fund)}<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:850">進階回看｜依歷史價格、投入紀錄、配息與分割計算</summary><p class="fine">這一區回看實際投入日期與歷史行情；上方則是假設未來年化報酬的情境試算，兩者用途不同。</p><div class="filter-row" style="margin:12px 0"><label>報酬計算</label><select id="idxReturnMode" class="field"><option value="price" ${mode==='price'?'selected':''}>純價格報酬</option><option value="cash" ${mode==='cash'?'selected':''}>含息總報酬（股息留現金）</option><option value="reinvest" ${mode==='reinvest'?'selected':''}>含息總報酬（股息再投入）</option></select><label>投入／加碼日期</label><input id="idxReturnDate" type="date" class="field"/><label>加碼預算（元）</label><input id="idxReturnAmount" type="number" min="1" step="1" class="field" placeholder="例：10000"/><button id="idxReturnAdd" class="btn primary">新增投入／加碼</button><label>買入手續費（%）</label><input id="idxReturnFee" type="number" min="0" max="5" step="0.0001" class="field" style="width:106px" value="${fee}"/></div>
+ ${projectionPanel(prices,fund)}${comparePanel()}<details style="margin-top:18px"><summary style="cursor:pointer;font-weight:850">進階回看｜依歷史價格、投入紀錄、配息與分割計算</summary><p class="fine">這一區回看實際投入日期與歷史行情；上方則是假設未來年化報酬的情境試算，兩者用途不同。</p><div class="filter-row" style="margin:12px 0"><label>報酬計算</label><select id="idxReturnMode" class="field"><option value="price" ${mode==='price'?'selected':''}>純價格報酬</option><option value="cash" ${mode==='cash'?'selected':''}>含息總報酬（股息留現金）</option><option value="reinvest" ${mode==='reinvest'?'selected':''}>含息總報酬（股息再投入）</option></select><label>投入／加碼日期</label><input id="idxReturnDate" type="date" class="field"/><label>加碼預算（元）</label><input id="idxReturnAmount" type="number" min="1" step="1" class="field" placeholder="例：10000"/><button id="idxReturnAdd" class="btn primary">新增投入／加碼</button><label>買入手續費（%）</label><input id="idxReturnFee" type="number" min="0" max="5" step="0.0001" class="field" style="width:106px" value="${fee}"/></div>
  <details style="margin:10px 0" open><summary><strong>每月定期定額（可與單筆加碼合併）</strong></summary>
  <div class="filter-row" style="margin-top:12px"><label>每月金額（元）</label><input id="idxDcaAmount" type="number" min="1" class="field" style="width:130px" placeholder="例：3000" value="${esc(dca.amount||'')}"/><label>每月扣款日</label><input id="idxDcaDay" type="number" min="1" max="31" class="field" style="width:77px" value="${esc(dca.day||1)}"/><label>開始日期</label><input id="idxDcaFrom" type="date" class="field" value="${esc(dca.from||'')}"/><label>結束日期</label><input id="idxDcaTo" type="date" class="field" value="${esc(dca.to||'')}"/><button id="idxDcaSave" class="btn primary">儲存定期定額</button><button id="idxDcaClear" class="btn">停用</button></div>
  <p class="fine">預計扣款 ${recurring.length} 筆；非交易日順延至其後第一個有報價交易日，若晚於預定日期超過 10 天則跳過並提示缺漏；實際買入以該日收盤價估算。</p></details>
@@ -358,6 +407,19 @@ function html(fund){if(!ETF.includes(fund))fund='0050';activeFund=fund;if(!pendi
  h+=`<div class="note-box mt16"><strong>計算說明：</strong>0050 於 2025-06-18 進行 1 拆 4；分割增加股數並相應降低每股成本，<strong>不增加投入本金</strong>。股息依除息日前持股認列應收，發放後留存現金或在發放日後第一個有價交易日收盤價模擬再投入；未滿一股的餘額保留現金。配息再投入不屬於額外加碼。XIRR 以真正投入資金及期末資產計算。股價／配息源自公開資料，可能有漏日；0050 的 2003～2004 年官方歷史分配資料未在目前查詢來源內完整驗證；006208 自上市後亦須核對資料來源的涵蓋期間，缺漏時不得將 0 元視為完整。未計賣出交易稅、滑價、股息稅負及其他費用。非交易建議。</div></details></section>`;
  return h;}
 document.addEventListener('click',e=>{if(!window.TradeCompassBridge?.isPage?.('indexETF'))return;const b=e.target.closest?.('button');if(!b)return;
+ if(b.id==='idxCompareRun'){
+  const codes=[...document.querySelectorAll('[data-idx-compare]:checked')].map(x=>x.dataset.idxCompare);
+  if(codes.length<2){alert('請至少勾選兩檔 ETF');return;}
+  const result=document.getElementById('idxCompareResult'),button=b;
+  const cfg={initial:Number(document.getElementById('idxProjInitial')?.value),monthly:Number(document.getElementById('idxProjMonthly')?.value),annual:Number(document.getElementById('idxProjAnnual')?.value)};
+  if(![cfg.initial,cfg.monthly,cfg.annual].every(v=>Number.isFinite(v)&&v>=0)){alert('請先確認上方投入金額');return;}
+  if(result)result.innerHTML='<p class="fine">正在載入所選 ETF 的歷史收盤價…</p>';button.disabled=true;
+  runIndexEtfComparison(codes,document.getElementById('idxCompareStart')?.value||'',cfg,document.getElementById('idxCompareMode')?.value||'price')
+   .then(html=>{const target=document.getElementById('idxCompareResult');if(target)target.innerHTML=html;})
+   .catch(err=>{const target=document.getElementById('idxCompareResult');if(target)target.innerHTML='<p class="alert">'+esc(err.message||String(err))+'</p>';})
+   .finally(()=>{const current=document.getElementById('idxCompareRun');if(current)current.disabled=false;});
+  return;
+ }
  if(b.id==='idxProjectionRun'){
   const initial=Number(document.getElementById('idxProjInitial')?.value),monthly=Number(document.getElementById('idxProjMonthly')?.value),annual=Number(document.getElementById('idxProjAnnual')?.value),years=Number(document.getElementById('idxProjYears')?.value),reinvest=!!document.getElementById('idxProjReinvest')?.checked;
   if(![initial,monthly,annual].every(v=>Number.isFinite(v)&&v>=0&&v<=1e12)||!Number.isInteger(years)||years<1||years>40){alert('請輸入 0 至 1,000,000,000,000 元的投入金額，試算年數需為 1 至 40 年');return;}
