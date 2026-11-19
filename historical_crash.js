@@ -3,7 +3,7 @@
 'use strict';
 const FUNDS=['0050','006208'];
 const splitEvents={ '0050':[{date:'2025-06-18',ratio:4}] };
-const cache={prices:{},dividends:{}};
+const cache={prices:{},dividends:{},index:null};
 const $=id=>document.getElementById(id);
 const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=x=>Number(x||0).toLocaleString('zh-TW',{maximumFractionDigits:0});
@@ -25,6 +25,26 @@ async function loadFund(code){
   cache.dividends[code]=d;
  }
 }
+async function loadIndex(){
+ if(cache.index)return;
+ const r=await fetch('data/history/taiex.json?ts='+Date.now(),{cache:'no-store'});
+ if(!r.ok)throw Error('加權指數歷史資料載入失敗（HTTP '+r.status+'）');
+ const d=await r.json();
+ if(d.index!=='TAIEX'||!Array.isArray(d.rows))throw Error('加權指數資料格式錯誤');
+ const rows=d.rows.map(x=>Array.isArray(x)?{date:x[0],close:Number(x[1])}:{date:x.date,close:Number(x.close)}).filter(x=>dateOK(x.date)&&x.close>0).sort((a,b)=>a.date.localeCompare(b.date));
+ if(rows.length<2||rows[0].date>'1999-01-31')throw Error('加權指數歷史資料尚未涵蓋 1999 年；請稍後重試更新。');
+ cache.index={...d,rows};
+}
+function largestDrawdown(rows){
+ let peak=rows[0],best={drawdown:0,peak:rows[0],trough:rows[0]};
+ for(const row of rows){
+  if(row.close>peak.close)peak=row;
+  else{const drawdown=1-row.close/peak.close;if(drawdown>best.drawdown)best={drawdown,peak,trough:row};}
+ }
+ best.recovery=rows.find(x=>x.date>best.trough.date&&x.close>=best.peak.close)?.date||null;
+ return best;
+}
+
 function splitAdjustedRows(code){const splits=splitEvents[code]||[];return cache.prices[code].map(r=>({date:r.date,close:r.close/splits.filter(e=>e.date>r.date).reduce((n,e)=>n*e.ratio,1)}));}
 function findEpisodes(rows,threshold){
  const out=[];if(rows.length<2)return out;
@@ -78,36 +98,36 @@ function entryRisk(calc,amount){
 }
 function html(){
  return '<section class="panel" style="margin-top:18px;padding:22px 24px"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap"><div><div class="eyebrow">LONG-TERM INVESTING HISTORY</div><h2 class="panel-title">歷史股災回顧區</h2><p class="subtitle">回看台股大幅回檔的時間與跌幅，並比較不同入場日期之後實際遇到的下跌。</p></div><button class="btn" id="historyCrashRefresh">讀取最新資料</button></div>'+
- '<div class="note-box mt16"><strong>回檔事件：</strong>以 0050 歷史收盤價從高點跌至低點辨識非重疊回檔，列出高點日、低點日、最大跌幅、下跌期間及收復前高所需交易日。0050 作為台股可投資標的的代理，不等同加權股價指數。</div>'+
- '<div class="filter-row" style="margin:16px 0"><label>投入金額（新臺幣）</label><input id="historyCrashAmount" class="field" type="number" min="1000" step="1000" value="100000" style="width:170px"><label>最低回檔幅度</label><select id="historyCrashThreshold" class="field"><option value="0.15" selected>15% 以上</option><option value="0.20">20% 以上</option><option value="0.25">25% 以上</option></select><label>報酬計算</label><select id="historyCrashMode" class="field"><option value="reinvest" selected>含息總報酬（配息再投入）</option><option value="cash">含息總報酬（配息留現金）</option><option value="price">純價格報酬（不含配息）</option></select><button id="historyCrashRun" class="btn primary">回顧歷次股災</button></div>'+
+ '<div class="note-box mt16"><strong>回檔事件：</strong>以證交所加權指數自 1999 年起的每日收盤價辨識非重疊回檔，列出高點日、低點日、最大跌幅、下跌期間及收復前高所需交易日。ETF 持有報酬則使用各 ETF 自身的歷史價格與配息資料；價格尚未涵蓋的年份不會外推。</div>'+
+ '<div class="filter-row" style="margin:16px 0"><label>投入金額（新臺幣）</label><input id="historyCrashAmount" class="field" type="number" min="1000" step="1000" value="100000" style="width:170px"><label>最低回檔幅度</label><select id="historyCrashThreshold" class="field"><option value="0.15" selected>15% 以上</option><option value="0.20">20% 以上</option><option value="0.25">25% 以上</option><option value="0.30">30% 以上</option><option value="max">僅顯示 1999 年以來最大回檔</option></select><label>報酬計算</label><select id="historyCrashMode" class="field"><option value="reinvest" selected>含息總報酬（配息再投入）</option><option value="cash">含息總報酬（配息留現金）</option><option value="price">純價格報酬（不含配息）</option></select><button id="historyCrashRun" class="btn primary">回顧歷次股災</button></div>'+
  '<div id="historyCrashResult" aria-live="polite"><p class="fine">按「回顧歷次股災」後，網站會讀取已發布的歷史價格與配息資料。</p></div>'+
  '<details open style="margin-top:20px;padding:16px;border:1px solid #dce8eb;border-radius:14px;background:#f9fcfc"><summary style="cursor:pointer;font-size:16px;font-weight:850">不同日期進場｜比較之後遇到的股災</summary><p class="fine">輸入最多三個進場日期，系統會以同一投入金額比較 0050 與 006208 持有至最新資料日的結果，並列出進場後最大回檔、低於本金的最大幅度及期末獲利。非交易日會順延至下一個有價格的交易日。</p>'+
  '<div class="filter-row" style="margin:12px 0"><label>進場日 A</label><input id="historyEntryDateA" type="date" class="field"><label>進場日 B</label><input id="historyEntryDateB" type="date" class="field"><label>進場日 C</label><input id="historyEntryDateC" type="date" class="field"><button id="historyEntryRun" class="btn primary">比較進場日</button></div><div id="historyEntryResult" aria-live="polite"><p class="fine">可選股災前、下跌途中或低點附近的不同日期，觀察入場時點如何影響後續持有體驗。</p></div></details>'+
  '<div class="note-box mt16"><strong>美股比較：</strong>本版先呈現網站已有可核對資料的台灣 ETF。美股 ETF 的歷史含息資料與匯率尚未納入，因此不顯示未驗證的 SPY／QQQ 績效；加入前需確認歷史還原收盤價與匯率來源。</div>'+
- '<p class="fine" style="margin-top:14px">資料來源：網站已發布的證交所 ETF 每日收盤價與配息檔案。回檔幅度依 0050 未還原收盤價計算；金額未計手續費與稅費。歷史表現不代表未來會以相同幅度或速度復原，也不構成投資建議。</p></section>';
+ '<p class="fine" style="margin-top:14px">資料來源：證交所加權指數歷史資料、網站已發布的 ETF 每日收盤價與配息檔案。大盤指數不含配息；ETF 持有回報依可用資料計算，金額未計手續費與稅費。歷史表現不代表未來會以相同幅度或速度復原，也不構成投資建議。</p></section>';
 }
 async function run(){
  const target=$('historyCrashResult'),btn=$('historyCrashRun');if(!target)return;
- const amount=Number($('historyCrashAmount')?.value),threshold=Number($('historyCrashThreshold')?.value),mode=$('historyCrashMode')?.value||'reinvest';
+ const amount=Number($('historyCrashAmount')?.value),thresholdChoice=$('historyCrashThreshold')?.value||'0.15',mode=$('historyCrashMode')?.value||'reinvest';
  if(!(amount>=1000)||!Number.isFinite(amount)){target.innerHTML='<p class="alert">投入金額至少為 1,000 元。</p>';return;}
  if(btn)btn.disabled=true;target.innerHTML='<p class="fine">正在載入 0050、006208 歷史價格與配息資料…</p>';
  try{
-  await Promise.all(FUNDS.map(loadFund));
-  const rows=cache.prices['0050'],adjustedRows=splitAdjustedRows('0050'),episodes=findEpisodes(adjustedRows,threshold);
+  await Promise.all([loadIndex(),...FUNDS.map(loadFund)]);
+  const rows=cache.index.rows,historicalMax=largestDrawdown(rows),threshold=thresholdChoice==='max'?historicalMax.drawdown:Number(thresholdChoice),episodes=findEpisodes(rows,threshold);
   if(!episodes.length){target.innerHTML='<p class="fine">目前資料期間內沒有符合門檻的回檔。</p>';return;}
-  let out='<p class="fine">回檔區間以 0050 歷史收盤價計算；每列列出於回檔前高點投入 '+money(amount)+' 元、持有至各 ETF 最新資料日的模擬結果。'+(episodes.some(e=>e.open)?' 最新一段仍在回檔中，尚未確認低點或復原時間。':'')+'</p>';
+  let out='<div class="grid stats" style="margin:12px 0">'+[['1999以來最大回檔',pct(-historicalMax.drawdown)],['最大回檔期間',historicalMax.peak.date+' → '+historicalMax.trough.date],['是否收復前高',historicalMax.recovery||'尚未收復'],['回顧資料範圍',rows[0].date+'～'+rows.at(-1).date]].map(x=>'<div class="metric"><span>'+esc(x[0])+'</span><strong>'+esc(x[1])+'</strong></div>').join('')+'</div><p class="fine">回檔區間以證交所加權指數收盤價計算；每列列出於回檔前高點投入 '+money(amount)+' 元、持有至各 ETF 最新資料日的模擬結果。'+(episodes.some(e=>e.open)?' 最新一段仍在回檔中，尚未確認低點或復原時間。':'')+'</p>';
   out+='<div class="table-wrap"><table class="data-table"><thead><tr><th>高點 → 低點日期</th><th class="num">最大回檔</th><th>下跌期間</th><th>收復前高</th><th>ETF</th><th class="num">期末資產</th><th class="num">獲利金額</th><th class="num">總報酬率</th></tr></thead><tbody>';
   for(const ep of episodes){
    const declineDays=rows.filter(x=>x.date>=ep.peak.date&&x.date<=ep.trough.date).length-1;
    const recoveryDays=ep.recovery?rows.filter(x=>x.date>ep.trough.date&&x.date<=ep.recovery).length:null;
    for(const code of FUNDS){
-    const calc=simulate(code,ep.peak.date,amount,mode);if(!calc)continue;
+    const calc=simulate(code,ep.peak.date,amount,mode);if(!calc){out+='<tr><td>'+esc(ep.peak.date)+' → '+esc(ep.trough.date)+'</td><td class="num">'+pct(-ep.drawdown)+'</td><td>'+declineDays+' 個交易日</td><td>'+(ep.recovery?recoveryDays+' 個交易日｜'+esc(ep.recovery):'尚未收復')+'</td><td><strong>'+code+'</strong></td><td colspan="3">價格資料未涵蓋此進場日，不提供 ETF 報酬外推</td></tr>';continue;}
     out+='<tr><td>'+esc(ep.peak.date)+' → '+esc(ep.trough.date)+(ep.open?'（進行中）':'')+'</td><td class="num">'+pct(-ep.drawdown)+'</td><td>'+declineDays+' 個交易日</td><td>'+(ep.recovery?recoveryDays+' 個交易日｜'+esc(ep.recovery):'尚未收復')+'</td><td><strong>'+code+'</strong></td><td class="num">'+money(calc.assets)+' 元</td><td class="num" style="color:'+(calc.profit>=0?'#087e76':'#b44050')+'">'+(calc.profit>=0?'+':'')+money(calc.profit)+' 元</td><td class="num">'+pct(calc.return)+'</td></tr>';
    }
   }
   out+='</tbody></table></div><p class="fine">股數以整股計算；配息再投入按發放後首個交易日收盤價模擬，未用完現金保留。'+(mode==='price'?'本次為純價格報酬，不含配息。':'')+' 回檔日期及跌幅由 0050 資料自動辨識，並非官方命名股災分類。</p>';
   const first=rows[0]?.date,last=rows.at(-1)?.date;
-  out+='<p class="fine">0050 價格涵蓋：'+esc(first||'—')+' 至 '+esc(last||'—')+'；006208：'+esc(cache.prices['006208'][0]?.date||'—')+' 至 '+esc(cache.prices['006208'].at(-1)?.date||'—')+'。';
+  out+='<p class="fine">加權指數涵蓋：'+esc(first||'—')+' 至 '+esc(last||'—')+'；0050 價格：'+esc(cache.prices['0050'][0]?.date||'—')+'～'+esc(cache.prices['0050'].at(-1)?.date||'—')+'；006208 價格：'+esc(cache.prices['006208'][0]?.date||'—')+' 至 '+esc(cache.prices['006208'].at(-1)?.date||'—')+'。';
   if(mode!=='price')out+=' 配息檔涵蓋範圍：0050 '+esc(cache.dividends['0050'].coverageStart||'未標示')+' 起；006208 '+esc(cache.dividends['006208'].coverageStart||'未標示')+' 起。早於可核對配息範圍的總報酬可能不完整。';
   out+='</p>';target.innerHTML=out;
  }catch(e){target.innerHTML='<p class="alert">'+esc(e.message||String(e))+'</p>';}finally{if(btn)btn.disabled=false;}
