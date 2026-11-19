@@ -322,15 +322,26 @@ document.addEventListener('click',async e=>{
  const token=Symbol();box.queryToken=token;box.textContent='讀取歷史報表中…';
  try{
  const index=await get('index'),dates=index.dates.slice(-count).reverse(),body=[];
+ const history=code && /^[0-9A-Z]{4,8}$/.test(code)?await get('ratios/'+code).catch(()=>[]):[];
+ const byDate=new Map(history.map(row=>[row[0],row]));
+ const points=dates.slice().reverse().map((date,i)=>({i,row:byDate.get(date)})).filter(p=>p.row);
+ let chart='';
+ if(code && points.length){
+ const values=points.map(p=>p.row[1]),low=Math.min(...values),high=Math.max(...values);
+ const line=points.map(p=>(10+580*p.i/Math.max(1,dates.length-1))+','+(100-90*(p.row[1]-low)/(high-low||1))).join(' ');
+ const last=points.at(-1).row;
+ chart='<h3>市場融資維持率（六成情境估算） '+last[1]+'%</h3><p>資料日 '+last[0]+'｜推估融資成本 '+last[2]+' 元｜以每日收盤近似買入成本，首日或缺價後以當日收盤初始化。個別標的實際融資成數可能不同。</p><svg viewBox="0 0 600 110" style="width:100%;height:140px" aria-label="融資維持率走勢"><polyline points="'+line+'" fill="none" stroke="#078c82" stroke-width="2"/></svg>';
+ }else if(code){chart='<p>此期間尚無可用維持率估值。</p>';}
+
  for(let i=0;i<dates.length;i+=8){
  if(box.queryToken!==token||!box.isConnected)return;
  body.push(...await Promise.all(dates.slice(i,i+8).map(async day=>{
  const d=await get(day),r=code?d.stocks[code]:d.market;
  const fmt=x=>code?x.toLocaleString('zh-TW'):(x/100000).toFixed(2);
- return '<tr><td>'+day+'</td>'+(r?[r[4],r[4]-r[3],r[0],r[1],r[2]].map(x=>'<td>'+fmt(x)+'</td>').join(''):'<td colspan="5">當日無此代號資料</td>')+'</tr>';
+ return '<tr><td>'+day+'</td>'+(code?'<td>'+(byDate.has(day)?byDate.get(day)[1]+'%':'—')+'</td>':'')+(r?[r[4],r[4]-r[3],r[0],r[1],r[2]].map(x=>'<td>'+fmt(x)+'</td>').join(''):'<td colspan="5">當日無此代號資料</td>')+'</tr>';
  })));
  }
- if(box.queryToken===token)box.innerHTML='<p>最新資料日 '+dates[0]+'｜後台更新 '+new Date(index.checked).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})+'｜共 '+dates.length+' 個交易日｜單位：'+(code?'交易單位':'億元')+'</p><div class="table-wrap"><table class="data-table"><thead><tr><th>日期</th><th>融資餘額</th><th>較前日增減</th><th>融資買進</th><th>融資賣出</th><th>現金償還</th></tr></thead><tbody>'+body.join('')+'</tbody></table></div>';
+ if(box.queryToken===token)box.innerHTML=chart+'<p>最新資料日 '+dates[0]+'｜後台更新 '+new Date(index.checked).toLocaleString('zh-TW',{timeZone:'Asia/Taipei'})+'｜共 '+dates.length+' 個交易日｜單位：'+(code?'交易單位':'億元')+'</p><div class="table-wrap"><table class="data-table"><thead><tr><th>日期</th>'+(code?'<th>估算維持率</th>':'')+'<th>融資餘額</th><th>較前日增減</th><th>融資買進</th><th>融資賣出</th><th>現金償還</th></tr></thead><tbody>'+body.join('')+'</tbody></table></div>';
  }catch{if(box.queryToken===token)box.textContent='融資歷史檔尚未發布或讀取失敗，請稍後重試。'}
 });
 function navTitle(){return ({overview:'總覽儀表板',transactions:'交易紀錄',tracking:'價格追蹤',settings:'策略設定',data:'資料備份',cathay:'國泰損益試算',about:'更新與儲存說明',institutions:'三大法人籌碼',etfSim:'ETF 長期獲利試算',stockSearch:'昨日收盤價行情查詢',activeETF:'主動式 ETF 持股異動',indexETF:'指數型 ETF 報酬試算',margin:'上市融資查詢',historyCrash:'歷史股災回顧區'})[active];}
