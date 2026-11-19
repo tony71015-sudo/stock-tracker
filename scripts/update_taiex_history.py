@@ -66,13 +66,22 @@ def fetch_month(year: int, month: int) -> list[list[object]]:
 
 
 def load_existing():
-    if not DEST.exists():
-        return {}
     try:
-        payload = json.loads(DEST.read_text(encoding="utf-8"))
+        if DEST.exists():
+            payload = json.loads(DEST.read_text(encoding="utf-8"))
+        else:
+            # A queued workflow may check out an older push commit while a newer
+            # Actions run has already published the archive to main.
+            archive_url = "https://raw.githubusercontent.com/tony71015-sudo/stock-tracker/main/data/history/taiex.json"
+            request = urllib.request.Request(archive_url, headers=HEADERS)
+            with urllib.request.urlopen(request, timeout=60) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        if payload.get("index") != "TAIEX":
+            return {}
         return {row[0]: row for row in payload.get("rows", [])
                 if isinstance(row, list) and len(row) == 2}
-    except (OSError, json.JSONDecodeError):
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, AttributeError):
+        LOG.warning("No reusable TAIEX archive available; a full backfill may be required.")
         return {}
 
 
