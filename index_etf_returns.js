@@ -398,9 +398,10 @@ document.addEventListener('mousemove',e=>{
   '<span style="color:#93c5fd">3%：獲利 '+sgn(rows[0].profit,0)+' 元｜資產 '+num(rows[0].assets,0)+' 元</span><br>'+
   '<span style="color:#5eead4">7%：獲利 '+sgn(rows[1].profit,0)+' 元｜資產 '+num(rows[1].assets,0)+' 元</span><br>'+
   '<span style="color:#fdba74">10%：獲利 '+sgn(rows[2].profit,0)+' 元｜資產 '+num(rows[2].assets,0)+' 元</span>';
- const wrap=tip.parentElement,box=wrap.getBoundingClientRect(),left=e.clientX-box.left+12;
+ const wrap=tip.parentElement,box=wrap.getBoundingClientRect();tip.style.display='block';
+ const left=e.clientX-box.left+12;
  tip.style.left=Math.max(8,Math.min(left,wrap.clientWidth-tip.offsetWidth-8))+'px';
- tip.style.top='8px';tip.style.display='block';
+ tip.style.top='8px';
 });
 document.addEventListener('change',e=>{if(e.target?.id==='idxReturnFee'){const x=Number(e.target.value);if(Number.isFinite(x)&&x>=0&&x<=5){store[activeFund+'_fee']=x;persist();refresh();}}
  if(e.target?.id==='idxReturnMode'){store[activeFund+'_mode']=e.target.value;persist();refresh();}});
