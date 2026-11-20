@@ -41,9 +41,16 @@
     return days > 5;
   }
   async function fetchJson(path) {
-    const response = await fetch(BASE+path+'?v='+Date.now(),{cache:'no-store'});
-    if(!response.ok) throw new Error(`HTTP ${response.status}：${path}`);
-    return await response.json();
+    const file = BASE+path+'?v='+Date.now();
+    for (const prefix of ['https://raw.githubusercontent.com/tony71015-sudo/stock-tracker/main/','']) {
+      try {
+        const response = await fetch(prefix+file,{cache:'no-store'});
+        if (!response.ok) throw new Error('HTTP '+response.status+'：'+path);
+        return await response.json();
+      } catch (error) {
+        if (!prefix) throw error;
+      }
+    }
   }
   function validate(data) {
     if (!data || data.schema !== 1 || data.units !== 'shares' || !data.marketData) throw Error('法人資料格式不相容');
