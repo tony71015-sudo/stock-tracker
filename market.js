@@ -12,7 +12,7 @@ async function getJson(file){const r=await fetch(file+'?cache='+Date.now(),{cach
 function validate(m){if(!m||m.schema!==1||!Array.isArray(m.items))throw Error('盤後行情資料結構不相容');for(const x of m.items){if(!x.code||!['TWSE','TPEX'].includes(x.market)||typeof x.close!=='number'||!x.date)throw Error('盤後行情資料格式錯誤');}}
 async function load(force=false){if(!force&&state.status!=='idle')return;
  state.status='loading';state.error='';refresh();
- try{const [m,i]=await Promise.allSettled([getJson('data/market/latest.json'),getJson('data/institutional/latest.json')]);
+ try{const [m,i]=await Promise.allSettled([getJson('https://raw.githubusercontent.com/tony71015-sudo/stock-tracker/main/data/market/latest.json').catch(()=>getJson('data/market/latest.json')),getJson('data/institutional/latest.json')]);
   if(m.status==='rejected')throw m.reason;validate(m.value);state.market=m.value;
   if(i.status==='fulfilled'&&i.value?.schema===1)state.inst=i.value;
   state.status='ready';}
