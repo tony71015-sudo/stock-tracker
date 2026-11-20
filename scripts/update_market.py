@@ -157,6 +157,19 @@ def choose_date(rows):
     for row in rows:counts[row['date']]=counts.get(row['date'],0)+1
     return max(counts,key=counts.get)
 
+def dated_twse(day):
+    stamp = day.strftime('%Y%m%d')
+    url = 'https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?response=json&type=ALLBUT0999&date=' + stamp
+    report = fetch_json(url, attempts=2)
+    if report.get('date') != stamp:
+        raise ValueError('TWSE report date mismatch')
+    for table in report.get('tables', []):
+        fields = table.get('fields', [])
+        if {'證券代號', '收盤價', '成交股數'}.issubset(fields):
+            rows = [dict(zip(fields, row), Date=stamp) for row in table['data']]
+            return parse_twse(rows), url
+    raise ValueError('No daily closing price table')
+
 def update():
     old={}
     if DEST.exists():
@@ -177,6 +190,23 @@ def update():
                     warnings.append('TPEX primary API unavailable; official alternative used: '+str(first_error)[:160])
                 except Exception as second_error:
                     raise ValueError('primary: '+str(first_error)[:220]+'; secondary: '+str(second_error)[:220])
+            source = SOURCES[m.lower()]
+            if m == 'TWSE':
+                now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8)))
+                target = now.date() if now.hour >= 14 else now.date() - dt.timedelta(days=1)
+                for offset in range(8):
+                    day = target - dt.timedelta(days=offset)
+                    if day.isoformat() <= choose_date(records):
+                        break
+                    if day.weekday() >= 5:
+                        continue
+                    try:
+                        candidate, candidate_url = dated_twse(day)
+                        if len(candidate) >= 0.65 * max(len(records), len(old_items[m])):
+                            records, source = candidate, candidate_url
+                            break
+                    except (ValueError, OSError) as error:
+                        LOG.info('TWSE daily report %s: %s', day, error)
             d=choose_date(records)
             records=[x for x in records if x['date']==d]
             records=list({r['code']:r for r in records}.values())
@@ -204,7 +234,7 @@ def update():
                         x['daytradeShares']=amt
                 if not daytrade:warnings.append(m+': official day-trading volume columns not validated; displaying N/A')
             except Exception as e:warnings.append(m+': day-trading API unavailable ('+str(e)[:100]+')')
-            items+=records;status[m]={'date':d,'count':len(records),'source':SOURCES[m.lower()],
+            items+=records;status[m]={'date':d,'count':len(records),'source':source,
                 'priceFetchedAt':old.get('markets',{}).get(m,{}).get('priceFetchedAt') if retained else dt.datetime.now(dt.timezone.utc).isoformat(),
                 'retained':retained}
         except Exception as e:
