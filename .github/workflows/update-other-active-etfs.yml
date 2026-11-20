@@ -3,7 +3,7 @@ name: 更新其他台股主動式ETF持股並發布網站（來源不足標示�
 on:
   push:
     branches: [main]
-    paths: [".github/workflows/update-other-active-etfs.yml"]
+    paths: [".github/workflows/update-other-active-etfs.yml", "scripts/import_other_active_etfs.py", "scripts/import_alternative_active_etfs.py"]
   schedule:
     # 21:55 Asia/Taipei weekdays. Collector generally offers T+1 for some issuers.
     - cron: '55 13 * * 1-5'
