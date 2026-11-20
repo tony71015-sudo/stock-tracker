@@ -66,6 +66,8 @@ def convert_day(code, date, rows, now=None):
                 kind='cash'
             elif any(x in text for x in ('期貨','期指','futures','future','台指','小台','微台','保證金')):
                 kind='futures' if '保證金' not in text else 'margin'
+            elif code in {'00994A', '00408A'} and symbol.replace('＋', '+') == '其他+負債':
+                kind='other_liabilities'
             elif any(x in text for x in ('應收','應付','receivable','payable')):
                 kind='receivable_payable'
             else:
