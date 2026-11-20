@@ -25,7 +25,7 @@ SOURCES = {
  '00401A': {'url':'https://accounts.cmoney.tw/etf/tw/00401A/fundholding','type':'third_party','provider':'CMoney'},
  '00996A': {'url':'https://www.megafunds.com.tw/MEGA/etf/etf_product.aspx?id=23','type':'issuer_official','provider':'兆豐投信'},
  '00407A': {'url':'https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=00407a.tw','type':'third_party','provider':'MoneyDJ'},
- '00410A': {'url':'https://www.moneydj.com/etf/x/basic/basic0007.xdjhtm?etfid=00410a.tw','type':'third_party','provider':'MoneyDJ'},
+ '00410A': {'url':'https://sitc.sinopac.com/SinopacEtfs/Etfs/SinglePcf/00410A','type':'issuer_official','provider':'永豐投信'},
 }
 DAY = re.compile(r'(20\d{2})[/-](\d{1,2})[/-](\d{1,2})')
 STOCK = re.compile(r'^(?:\s*([\d]{4,6}[A-Z]?)\s*|.*?\(([\d]{4,6}[A-Z]?)(?:\.(?:TW|TWO))?\)\s*)$',re.I)
@@ -62,7 +62,7 @@ class TableHTML(HTMLParser):
 def match_headers(header):
  cols=[clean(c) for c in header]
  def loc(candidates):return next((i for i,x in enumerate(cols) if any(k in x for k in candidates)),None)
- code=loc(('代號','個股名稱','股票名稱'))
+ code=loc(('代號','證券代碼','個股名稱','股票名稱'))
  shares=loc(('持有股數','股數','持有數','持股股數'))
  weight=loc(('權重','投資比例','持股比重'))
  if None in (code,shares,weight):return None
@@ -83,7 +83,13 @@ def extract_html(text,code,source,now=None):
    earlier=' '.join(preceding)
    block=earlier[-1800:]
    date_mentions=list(DAY.finditer(block))
-   if not date_mentions:continue
+   if not date_mentions and code!='00410A':continue
+   if code=='00410A':
+    # This page also dates its creation basket. Bind the date to fund assets.
+    sections=re.findall(r'資料日期\s*[:：]?\s*(\d{4}/\d{1,2}/\d{1,2})\s*基金資產',earlier)
+    if not sections or '佔基金淨資產之權重' not in ''.join(head):continue
+    date_mentions=[DAY.fullmatch(sections[-1])]
+    if not date_mentions[0]:continue
    last=date_mentions[-1];date=f'{last[1]}-{int(last[2]):02d}-{int(last[3]):02d}'
    try:disclosure=dt.date.fromisoformat(date)
    except ValueError:continue
@@ -124,7 +130,7 @@ def fetch_source(src):
  # Explicit fixed URL allowlist. This is a conservative best-effort fetch;
  # HTML/JS changes, access restrictions, and provider terms may prevent it.
  host=urlparse(src['url']).hostname
- if host not in {'accounts.cmoney.tw','www.megafunds.com.tw','www.moneydj.com'}:
+ if host not in {'accounts.cmoney.tw','www.megafunds.com.tw','www.moneydj.com','sitc.sinopac.com'}:
   raise BridgeError('Unexpected source host')
  req=Request(src['url'],headers={'User-Agent':'Mozilla/5.0 (TradeCompass portfolio archive research)','Accept':'text/html'})
  with urlopen(req,timeout=20) as response:
