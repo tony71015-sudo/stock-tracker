@@ -1,15 +1,16 @@
 {
   "schema": 1,
-  "generatedAt": "2026-11-24T21:30:18.903119+00:00",
+  "generatedAt": "2026-11-25T20:38:35.860939+00:00",
   "goal": "各ETF至少12個不同交易日期的實際持股快照",
   "funds": {
     "0050": {
       "etf": "0050",
       "targetTradingDates": 12,
-      "availableTradingDates": 8,
-      "remainingToTarget": 4,
+      "availableTradingDates": 9,
+      "remainingToTarget": 3,
       "targetReached": false,
       "latestTwelveDates": [
+        "2026-11-25",
         "2026-11-24",
         "2026-11-23",
         "2026-11-20",
@@ -20,8 +21,9 @@
         "2026-11-13"
       ],
       "earliestAvailableDate": "2026-11-13",
-      "latestAvailableDate": "2026-11-24",
+      "latestAvailableDate": "2026-11-25",
       "sourceTypesByDate": {
+        "2026-11-25": "third_party",
         "2026-11-24": "third_party",
         "2026-11-23": "third_party",
         "2026-11-20": "third_party",
@@ -36,10 +38,11 @@
     "006208": {
       "etf": "006208",
       "targetTradingDates": 12,
-      "availableTradingDates": 19,
+      "availableTradingDates": 20,
       "remainingToTarget": 0,
       "targetReached": true,
       "latestTwelveDates": [
+        "2026-11-25",
         "2026-11-24",
         "2026-11-23",
         "2026-11-20",
@@ -50,12 +53,12 @@
         "2026-11-13",
         "2026-11-12",
         "2026-11-11",
-        "2026-11-10",
-        "2026-11-09"
+        "2026-11-10"
       ],
       "earliestAvailableDate": "2026-10-29",
-      "latestAvailableDate": "2026-11-24",
+      "latestAvailableDate": "2026-11-25",
       "sourceTypesByDate": {
+        "2026-11-25": "official",
         "2026-11-24": "official",
         "2026-11-23": "official",
         "2026-11-20": "official",
@@ -66,18 +69,18 @@
         "2026-11-13": "official",
         "2026-11-12": "official",
         "2026-11-11": "official",
-        "2026-11-10": "official",
-        "2026-11-09": "official"
+        "2026-11-10": "official"
       },
       "note": "只計入真正通過驗證且已保存的不同持股日期；不會複製或推估歷史股數。"
     },
     "009816": {
       "etf": "009816",
       "targetTradingDates": 12,
-      "availableTradingDates": 8,
-      "remainingToTarget": 4,
+      "availableTradingDates": 9,
+      "remainingToTarget": 3,
       "targetReached": false,
       "latestTwelveDates": [
+        "2026-11-25",
         "2026-11-24",
         "2026-11-23",
         "2026-11-20",
@@ -88,8 +91,9 @@
         "2026-11-13"
       ],
       "earliestAvailableDate": "2026-11-13",
-      "latestAvailableDate": "2026-11-24",
+      "latestAvailableDate": "2026-11-25",
       "sourceTypesByDate": {
+        "2026-11-25": "third_party",
         "2026-11-24": "third_party",
         "2026-11-23": "third_party",
         "2026-11-20": "third_party",
